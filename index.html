@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>STT Voice Data Collection Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <!-- JSZip for Exporting Complete Dataset ZIP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+        </div>
+        <div>
+          <h1>STT Voice Data Collection</h1>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="header-tabs">
+        <button class="tab-btn active" id="tabRecordingBtn" onclick="switchView('recording')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+          </svg>
+          Recording Screen
+        </button>
+        <button class="tab-btn" id="tabUploadBtn" onclick="switchView('upload')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" x2="12" y1="3" y2="15"/>
+          </svg>
+          Upload Files
+        </button>
+        <button class="tab-btn" id="tabDatasetBtn" onclick="switchView('dataset')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="8" y1="6" x2="21" y2="6"/>
+            <line x1="8" y1="12" x2="21" y2="12"/>
+            <line x1="8" y1="18" x2="21" y2="18"/>
+            <line x1="3" y1="6" x2="3.01" y2="6"/>
+            <line x1="3" y1="12" x2="3.01" y2="12"/>
+            <line x1="3" y1="18" x2="3.01" y2="18"/>
+          </svg>
+          Recorded Data
+        </button>
+        <button class="tab-btn" id="tabExportBtn" onclick="switchView('export')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" x2="12" y1="15" y2="3"/>
+          </svg>
+          Export
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Viewport -->
+  <main class="main-container">
+
+    <!-- VIEW 1: MAIN RECORDING SCREEN (Core Focus) -->
+    <section id="recordingView" class="view-section active-view">
+      <div class="recording-workspace">
+        
+        <!-- Progress Header -->
+        <div class="progress-header">
+          <div class="top-meta-row">
+            <span class="language-badge" id="currentLangBadge">English</span>
+            <span class="counter-text" id="counterText">0 / 0</span>
+          </div>
+
+          <div class="progress-track">
+            <div class="progress-fill" id="progressBarFill"></div>
+          </div>
+
+          <div class="stats-summary-row">
+            <span>Recorded: <strong id="statRecordedCount">0</strong></span>
+            <span>Remaining: <strong id="statRemainingCount">0</strong></span>
+            <span>Target: <strong>2–4 sec</strong></span>
+          </div>
+        </div>
+
+        <!-- HUGE SENTENCE CARD (The biggest element on screen) -->
+        <div class="sentence-hero-card">
+          <span class="sentence-sub-id" id="sentenceIdLabel">ID: ---</span>
+          <span class="sentence-lead-hint">Read the text above</span>
+          <div class="sentence-display" id="sentenceDisplay">
+            Please upload text files or click "Load Project Prompts" to start recording.
+          </div>
+        </div>
+
+        <!-- Waveform Visualizer & Timer Monitor -->
+        <div class="recording-monitor-card">
+          <div class="canvas-container">
+            <canvas id="waveformCanvas"></canvas>
+          </div>
+
+          <div class="timer-box">
+            <div class="rec-indicator" id="recIndicator"></div>
+            <span class="timer-text" id="timerText">00:00.00</span>
+          </div>
+          <span class="target-hint" id="targetHint">Target recording duration: 2–4 seconds</span>
+
+          <!-- Duration Validation Warning / Success Notice -->
+          <div class="validation-notice hide" id="validationNotice"></div>
+
+          <!-- Audio Playback (Shown after recording is stopped) -->
+          <div class="audio-player-box" id="audioPlayerBox">
+            <audio id="playbackAudio" controls></audio>
+          </div>
+        </div>
+
+        <!-- Recording & Navigation Controls Cluster -->
+        <div class="controls-cluster">
+          <!-- Primary Big Record Button -->
+          <div class="record-btn-wrapper">
+            <button class="big-record-btn" id="recordToggleBtn" onclick="toggleRecording()">
+              <svg id="recIconMic" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+              <span id="recordBtnLabel">Start Recording</span>
+            </button>
+          </div>
+
+          <!-- Action & Navigation Bar -->
+          <div class="action-nav-row">
+            <div class="nav-cluster">
+              <button class="btn btn-secondary" id="prevBtn" onclick="goToPreviousSentence()">
+                ← Previous
+              </button>
+              <button class="btn btn-secondary" id="reRecordBtn" onclick="reRecordSentence()" style="display: none;">
+                ↺ Re-record
+              </button>
+            </div>
+
+            <div class="nav-cluster">
+              <button class="btn btn-skip" id="skipBtn" onclick="skipCurrentSentence()">
+                Skip
+              </button>
+              <button class="btn btn-primary" id="saveNextBtn" onclick="saveAndNextSentence()">
+                Save & Next →
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- VIEW 2: UPLOAD TEXT FILES -->
+    <section id="uploadView" class="view-section">
+      <div class="upload-card-box">
+        <div class="section-headline">
+          <h2>Upload Text Files</h2>
+          <p>Upload up to 6 text files (English, Hindi, Gujarati). Each line will be converted into an individual recording task.</p>
+        </div>
+
+        <!-- Quick 1-Click Load Project Prompts Preset -->
+        <div class="quick-preset-box">
+          <div>
+            <h3>⚡ Quick Start: Load Existing Project Prompts</h3>
+            <p>Automatically import the 6 prompt files from this project (English 1 & 2, Gujarati 1 & 2, Hindi 1 & 2).</p>
+          </div>
+          <button class="btn btn-primary" id="loadProjectPromptsBtn" onclick="loadProjectPrompts()">
+            Load All 6 Prompt Files
+          </button>
+        </div>
+
+        <!-- Drag & Drop Zone -->
+        <div class="file-dropzone" id="fileDropzone" onclick="document.getElementById('fileInput').click()">
+          <input type="file" id="fileInput" multiple accept=".txt,.md" style="display: none;" onchange="handleFileSelect(this.files)">
+          <div class="dropzone-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" x2="12" y1="3" y2="15"/>
+            </svg>
+          </div>
+          <div>
+            <h3>Click to Upload or Drag and Drop Text Files</h3>
+            <p>Supports .txt and .md files (UTF-8 encoded for Hindi & Gujarati Unicode)</p>
+          </div>
+        </div>
+
+        <!-- Uploaded Files Table -->
+        <div class="file-table-wrap">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>File Name</th>
+                <th>Language</th>
+                <th>Sentences Extracted</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="uploadedFilesTableBody">
+              <tr>
+                <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 32px;">
+                  No files uploaded yet. Upload .txt files or click "Load All 6 Prompt Files" above.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button class="btn btn-primary" onclick="switchView('recording')">
+            Go to Recording Studio →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 3: DATASET TABLE (Recorded Data) -->
+    <section id="datasetView" class="view-section">
+      <div class="dataset-container-card">
+        <div class="dataset-toolbar">
+          <div class="search-box">
+            <input type="text" id="datasetSearchInput" placeholder="Search sentence text, ID..." oninput="filterDatasetTable()">
+          </div>
+
+          <div class="filter-btn-group">
+            <button class="filter-pill-btn active" data-filter="all" onclick="setDatasetFilter('all', this)">All</button>
+            <button class="filter-pill-btn" data-filter="English" onclick="setDatasetFilter('English', this)">English</button>
+            <button class="filter-pill-btn" data-filter="Hindi" onclick="setDatasetFilter('Hindi', this)">Hindi</button>
+            <button class="filter-pill-btn" data-filter="Gujarati" onclick="setDatasetFilter('Gujarati', this)">Gujarati</button>
+            <button class="filter-pill-btn" data-filter="recorded" onclick="setDatasetFilter('recorded', this)">Recorded</button>
+            <button class="filter-pill-btn" data-filter="pending" onclick="setDatasetFilter('pending', this)">Pending</button>
+            <button class="filter-pill-btn" data-filter="skipped" onclick="setDatasetFilter('skipped', this)">Skipped</button>
+          </div>
+        </div>
+
+        <div class="file-table-wrap" style="border: none; border-radius: 0;">
+          <table class="app-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Language</th>
+                <th>Exact Transcript</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>Audio Playback</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="datasetTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                  No dataset items loaded yet.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: EXPORT DATASET -->
+    <section id="exportView" class="view-section">
+      <div class="export-grid">
+        <div class="export-card">
+          <h3>📄 Export Metadata CSV</h3>
+          <p>Downloads a clean UTF-8 CSV containing all sentence transcripts, languages, recording durations, and status.</p>
+          <button class="btn btn-primary" onclick="exportMetadataCSV()">
+            Export Metadata CSV
+          </button>
+        </div>
+
+        <div class="export-card">
+          <h3>📦 Export Complete Dataset (ZIP)</h3>
+          <p>Packages all recorded WebM audio files inside an <code>audio/</code> folder along with <code>metadata.csv</code> into a single downloadable ZIP archive.</p>
+          <button class="btn btn-primary" onclick="exportCompleteDatasetZIP()">
+            Export Complete Dataset (ZIP)
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- App Toast Notification -->
+  <div class="app-toast" id="appToast"></div>
+
+  <!-- Main JavaScript Logic -->
+  <script src="script.js"></script>
+</body>
+</html>

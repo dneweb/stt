@@ -1,0 +1,41 @@
+{
+  "total_clips": 60,
+  "total_audio_hours": 0.12,
+  "total_eval_time_sec": 78.7,
+  "avg_latency_ms": 1289.2,
+  "avg_rtf": 0.171,
+  "overall_norm_cer": 18.59,
+  "overall_norm_wer": 50.75,
+  "overall_raw_cer": 19.61,
+  "overall_raw_wer": 52.51,
+  "script_confusion_rate": 6.67,
+  "by_language": {
+    "English": {
+      "clips": 20,
+      "norm_cer": 23.1,
+      "norm_wer": 57.23,
+      "raw_cer": 25.08,
+      "raw_wer": 58.44,
+      "avg_latency_ms": 968.5,
+      "script_confusion_pct": 10.0
+    },
+    "Hindi": {
+      "clips": 20,
+      "norm_cer": 15.53,
+      "norm_wer": 43.36,
+      "raw_cer": 16.27,
+      "raw_wer": 47.24,
+      "avg_latency_ms": 1047.2,
+      "script_confusion_pct": 0.0
+    },
+    "Gujarati": {
+      "clips": 20,
+      "norm_cer": 17.14,
+      "norm_wer": 51.67,
+      "raw_cer": 17.49,
+      "raw_wer": 51.84,
+      "avg_latency_ms": 1851.7,
+      "script_confusion_pct": 10.0
+    }
+  }
+}

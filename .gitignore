@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.DS_Store
+
+# Large model binaries and archives (>100MB GitHub limit)
+*.zip
+*.tar
+*.tar.gz
+*.bin
+*.safetensors
+*.onnx
+models/
+content/
+checkpoints/
+
+# Raw audio files and dataset binaries
+*.wav
+*.mp3
+*.m4a
+*.flac
+complete_stt_dataset_23hrs/data/processed/
+dataset/
+temp_uploads/
+
+# Virtual Environments
+venv/
+env/
+.venv/
+
+# Temporary files
+/tmp/
+*.log
+
