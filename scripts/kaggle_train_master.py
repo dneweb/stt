@@ -27,51 +27,108 @@ from transformers import Wav2Vec2ForCTC, Wav2Vec2Config
 CONFIG = {
     "project_name": "trilingual-stt-master-convergence",
     "sample_rate": 16000,
-    "max_duration_sec": 12.0,     # Max clip length
+    "max_duration_sec": 12.0,
     "min_duration_sec": 0.5,
-    "batch_size": 8,              # Per GPU batch size
+    "batch_size": 8,                  # Per GPU batch size
     "gradient_accumulation_steps": 4, # Effective batch size = 8 * 4 = 32 clips
-    "epochs": 15,                 # Refinement epochs
-    "learning_rate": 1.2e-5,      # Polished learning rate for fine-tuning
-    "min_learning_rate": 1.0e-6,  # Cosine decay floor
+    "epochs": 15,                     # Refinement epochs
+    "learning_rate": 1.2e-5,          # Polished learning rate for fine-tuning
+    "min_learning_rate": 1.0e-6,      # Cosine decay floor
     "weight_decay": 0.01,
     "warmup_steps": 300,
     "spec_augment": True,
-    "mask_time_prob": 0.05,
-    "mask_feature_prob": 0.04,
     "output_dir": "/kaggle/working/stt_master_final",
     "zip_output": "/kaggle/working/stt_master_best_model.zip"
 }
 
 # ==============================================================================
-# 2. DATASET PATH AUTO-DETECTION
+# 2. BULLETPROOF KAGGLE ENVIRONMENT SCANNER (OS.WALK)
 # ==============================================================================
-def find_kaggle_path(patterns: List[str]) -> Optional[str]:
-    for p in patterns:
-        matches = glob.glob(p)
-        if matches:
-            return matches[0]
-    return None
+def scan_kaggle_environment(base_input: str = "/kaggle/input"):
+    """
+    Recursively scans the entire Kaggle input tree to discover:
+    1. All CSV manifests (Extended, Train, Validation)
+    2. All Model Checkpoints (model.safetensors / config.json)
+    3. An O(1) audio filename lookup index
+    """
+    if not os.path.exists(base_input):
+        base_input = "."  # Local fallback
 
-def resolve_audio_file(rel_path: str, search_roots: List[str]) -> Optional[str]:
-    # Direct check
-    if os.path.exists(rel_path):
-        return rel_path
+    all_csvs = []
+    all_ckpts = []
+    audio_index = {}
 
-    # Clean rel_path
-    clean_rel = rel_path.lstrip("/").replace("data/data/", "data/")
-    for root in search_roots:
-        candidate = os.path.join(root, clean_rel)
-        if os.path.exists(candidate):
-            return candidate
+    print(f"🔍 Deep scanning '{base_input}' for all manifests, models, and audio files ...")
+    start_t = time.time()
 
-        # Try basename in subfolders
-        fname = os.path.basename(rel_path)
-        for sub in ["all_speakers", "chunks", "wav", "audio"]:
-            cand2 = os.path.join(root, sub, fname)
-            if os.path.exists(cand2):
-                return cand2
-    return None
+    for root, dirs, files in os.walk(base_input):
+        for f in files:
+            f_lower = f.lower()
+            full_path = os.path.join(root, f)
+
+            if f_lower.endswith(".csv"):
+                all_csvs.append(full_path)
+            elif f_lower in ["model.safetensors", "pytorch_model.bin"]:
+                if "onnx" not in root.lower():
+                    all_ckpts.append(root)
+            elif f_lower.endswith(".wav"):
+                # O(1) index by file basename
+                audio_index[f] = full_path
+
+    elapsed = time.time() - start_t
+    all_ckpts = list(set(all_ckpts))
+    print(f"✓ Scan complete in {elapsed:.1f}s: Found {len(all_csvs)} CSVs, {len(all_ckpts)} Checkpoint directories, {len(audio_index):,} Audio files.\n")
+
+    # Match CSV manifests by filename heuristics
+    ext_manifest = None
+    orig_train_manifest = None
+    orig_val_manifest = None
+
+    for c in all_csvs:
+        fname = os.path.basename(c).lower()
+        if "metadata.csv" in fname:
+            ext_manifest = c
+        elif "combined_train" in fname or ("train" in fname and "combined" in fname):
+            orig_train_manifest = c
+        elif "combined_val" in fname or ("val" in fname and "combined" in fname):
+            orig_val_manifest = c
+
+    # Fallbacks if filenames differ
+    if not orig_train_manifest:
+        for c in all_csvs:
+            if "train" in os.path.basename(c).lower():
+                orig_train_manifest = c
+                break
+
+    if not orig_val_manifest:
+        for c in all_csvs:
+            if "val" in os.path.basename(c).lower():
+                orig_val_manifest = c
+                break
+
+    if not ext_manifest:
+        for c in all_csvs:
+            if c not in [orig_train_manifest, orig_val_manifest] and "meta" in os.path.basename(c).lower():
+                ext_manifest = c
+                break
+
+    # Prioritize Checkpoints: 11% / v3 > 13.55% > 14.95% > others
+    def ckpt_priority(path_str):
+        p = path_str.lower()
+        if "11" in p or "v3" in p:
+            return 1
+        if "13" in p or "13.55" in p:
+            return 2
+        if "14" in p or "14.95" in p:
+            return 3
+        if "checkpoint" in p or "best" in p:
+            return 4
+        return 5
+
+    all_ckpts.sort(key=ckpt_priority)
+    best_ckpt = all_ckpts[0] if all_ckpts else None
+
+    return ext_manifest, orig_train_manifest, orig_val_manifest, best_ckpt, audio_index, all_csvs, all_ckpts
 
 # ==============================================================================
 # 3. CHARACTER TOKENIZER (250-Token Trilingual Map)
@@ -115,7 +172,7 @@ class MasterSTTDataset(Dataset):
     def __getitem__(self, idx: int):
         item = self.entries[idx]
         wav_path = item["full_audio_path"]
-        transcript = str(item["transcript"]).strip()
+        transcript = str(item.get("transcript", "")).strip()
         lang = str(item.get("language", "en")).lower()
 
         try:
@@ -135,8 +192,7 @@ class MasterSTTDataset(Dataset):
                 "transcript": transcript,
                 "language": lang
             }
-        except Exception as e:
-            # Fallback to tiny silent tensor
+        except Exception:
             return {
                 "input_values": torch.zeros(16000, dtype=torch.float32),
                 "labels": torch.tensor([0], dtype=torch.long),
@@ -145,7 +201,6 @@ class MasterSTTDataset(Dataset):
             }
 
 def collate_fn(batch):
-    # Filter empty
     batch = [b for b in batch if len(b["labels"]) > 0 and len(b["input_values"]) > 1600]
     if not batch:
         return None
@@ -227,76 +282,82 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"🔥 Compute Device: {device} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
 
-    # Locate Datasets
-    print("\n🔍 Detecting datasets in /kaggle/input/ ...")
-    ext_manifest = find_kaggle_path([
-        "/kaggle/input/**/extended-recordings/**/metadata.csv",
-        "/kaggle/input/**/extended_recordings/**/metadata.csv",
-        "/kaggle/input/**/metadata.csv"
-    ])
-    orig_train_manifest = find_kaggle_path([
-        "/kaggle/input/**/combined_train.csv",
-        "/kaggle/input/**/train.csv"
-    ])
-    orig_val_manifest = find_kaggle_path([
-        "/kaggle/input/**/combined_val.csv",
-        "/kaggle/input/**/val.csv"
-    ])
-    checkpoint_dir = find_kaggle_path([
-        "/kaggle/input/**/stt_trained_model_v3_11cer*",
-        "/kaggle/input/**/best*13*55*",
-        "/kaggle/input/**/best*14*95*",
-        "/kaggle/input/**/stt-w2v-checkpoint*"
-    ])
+    # Scan Environment
+    ext_manifest, orig_train, orig_val, best_ckpt, audio_index, all_csvs, all_ckpts = scan_kaggle_environment("/kaggle/input")
 
-    print(f"✓ Extended Manifest: {ext_manifest}")
-    print(f"✓ Original Train Manifest: {orig_train_manifest}")
-    print(f"✓ Validation Manifest: {orig_val_manifest}")
-    print(f"✓ Resume Checkpoint: {checkpoint_dir}")
+    print(f"✓ Extended Manifest      : {ext_manifest}")
+    print(f"✓ Original Train Manifest: {orig_train}")
+    print(f"✓ Validation Manifest    : {orig_val}")
+    print(f"✓ Active Checkpoint Dir  : {best_ckpt}")
 
-    # Search roots for WAV files
-    search_roots = glob.glob("/kaggle/input/**", recursive=True)
+    if not orig_train and not ext_manifest:
+        print("\n❌ CRITICAL: Could not automatically detect a training CSV manifest.")
+        print("Available CSV files found:")
+        for c in all_csvs:
+            print(f"  • {c}")
+        if all_csvs:
+            print(f"\n⚡ Auto-selecting first available CSV as training set: {all_csvs[0]}")
+            orig_train = all_csvs[0]
+        else:
+            raise RuntimeError("No CSV files found anywhere in /kaggle/input/. Please check added datasets.")
+
+    if not best_ckpt:
+        print("\n❌ CRITICAL: No checkpoint directory with model weights found.")
+        print("Available candidate directories:")
+        for d in all_ckpts:
+            print(f"  • {d}")
+        raise RuntimeError("No model checkpoint found in /kaggle/input/. Please attach a checkpoint dataset.")
 
     # Load & Merge Training Data
     dfs_train = []
-    if orig_train_manifest and os.path.exists(orig_train_manifest):
-        df_ot = pd.read_csv(orig_train_manifest)
-        dfs_train.append(df_ot)
-    if ext_manifest and os.path.exists(ext_manifest):
-        df_ext = pd.read_csv(ext_manifest)
-        dfs_train.append(df_ext)
-
-    if not dfs_train:
-        raise RuntimeError("No training manifests found in /kaggle/input/")
+    if orig_train and os.path.exists(orig_train):
+        dfs_train.append(pd.read_csv(orig_train))
+    if ext_manifest and os.path.exists(ext_manifest) and ext_manifest != orig_train:
+        dfs_train.append(pd.read_csv(ext_manifest))
 
     df_train_raw = pd.concat(dfs_train, ignore_index=True)
 
-    # Resolve audio paths
-    print("\n📦 Resolving audio paths across datasets ...")
+    # Standardize column names
+    if "audio_filepath" in df_train_raw.columns:
+        df_train_raw["audio_path"] = df_train_raw["audio_filepath"]
+    if "text" in df_train_raw.columns and "transcript" not in df_train_raw.columns:
+        df_train_raw["transcript"] = df_train_raw["text"]
+
+    # Resolve audio paths with O(1) audio_index
+    print("📦 Resolving audio file paths ...")
     valid_train = []
     for _, row in df_train_raw.iterrows():
-        p = resolve_audio_file(str(row["audio_path"]), search_roots)
-        if p and os.path.exists(p):
-            row_dict = row.to_dict()
-            row_dict["full_audio_path"] = p
-            valid_train.append(row_dict)
+        raw_p = str(row.get("audio_path", ""))
+        fname = os.path.basename(raw_p)
+        full_p = audio_index.get(fname)
+        if full_p and os.path.exists(full_p):
+            r_dict = row.to_dict()
+            r_dict["full_audio_path"] = full_p
+            valid_train.append(r_dict)
 
     df_train = pd.DataFrame(valid_train)
-    print(f"✓ Total Verified Training Clips: {len(df_train):,} (Gujarati: {(df_train['language']=='gu').sum()}, Hindi: {(df_train['language']=='hi').sum()}, English: {(df_train['language']=='en').sum()})")
+    print(f"✓ Verified Training Clips: {len(df_train):,}")
+    if "language" in df_train.columns:
+        print(f"  • Distribution: Gujarati: {(df_train['language']=='gu').sum()}, Hindi: {(df_train['language']=='hi').sum()}, English: {(df_train['language']=='en').sum()}")
 
     # Load Validation Data
     valid_val = []
-    if orig_val_manifest and os.path.exists(orig_val_manifest):
-        df_val_raw = pd.read_csv(orig_val_manifest)
+    if orig_val and os.path.exists(orig_val) and orig_val != orig_train:
+        df_val_raw = pd.read_csv(orig_val)
+        if "audio_filepath" in df_val_raw.columns:
+            df_val_raw["audio_path"] = df_val_raw["audio_filepath"]
+        if "text" in df_val_raw.columns and "transcript" not in df_val_raw.columns:
+            df_val_raw["transcript"] = df_val_raw["text"]
+
         for _, row in df_val_raw.iterrows():
-            p = resolve_audio_file(str(row["audio_path"]), search_roots)
-            if p and os.path.exists(p):
-                row_dict = row.to_dict()
-                row_dict["full_audio_path"] = p
-                valid_val.append(row_dict)
+            fname = os.path.basename(str(row.get("audio_path", "")))
+            full_p = audio_index.get(fname)
+            if full_p and os.path.exists(full_p):
+                r_dict = row.to_dict()
+                r_dict["full_audio_path"] = full_p
+                valid_val.append(r_dict)
 
     if not valid_val:
-        # 5% split fallback if no dedicated validation manifest
         print("⚠️ Splitting 5% of training set for validation ...")
         split_idx = int(len(df_train) * 0.95)
         df_val = df_train.iloc[split_idx:].copy()
@@ -304,17 +365,39 @@ def main():
     else:
         df_val = pd.DataFrame(valid_val)
 
-    print(f"✓ Total Validation Clips: {len(df_val):,}")
+    print(f"✓ Verified Validation Clips: {len(df_val):,}\n")
 
-    # Initialize Tokenizer
-    vocab_file = os.path.join(checkpoint_dir, "vocab.json")
+    # Find vocab.json
+    vocab_candidates = [
+        os.path.join(best_ckpt, "vocab.json"),
+        os.path.join(os.path.dirname(best_ckpt), "vocab.json")
+    ]
+    vocab_file = None
+    for vc in vocab_candidates:
+        if os.path.exists(vc):
+            vocab_file = vc
+            break
+
+    if not vocab_file:
+        # Search anywhere in /kaggle/input
+        for root, dirs, files in os.walk("/kaggle/input"):
+            if "vocab.json" in files:
+                vocab_file = os.path.join(root, "vocab.json")
+                break
+
+    if not vocab_file:
+        raise RuntimeError("vocab.json not found in input datasets.")
+
     tokenizer = TrilingualTokenizer(vocab_file)
-    print(f"✓ Loaded Trilingual Tokenizer ({len(tokenizer.char_to_id)} tokens)")
+    print(f"✓ Loaded Trilingual Tokenizer from {vocab_file} ({len(tokenizer.char_to_id)} tokens)")
 
     # Language Balanced Weighted Sampling (33% GU, 33% HI, 33% EN)
-    lang_counts = df_train["language"].value_counts().to_dict()
-    weights = [1.0 / max(1, lang_counts.get(l, 100)) for l in df_train["language"]]
-    sampler = WeightedRandomSampler(weights=weights, num_samples=len(df_train), replacement=True)
+    if "language" in df_train.columns and df_train["language"].nunique() > 1:
+        lang_counts = df_train["language"].value_counts().to_dict()
+        weights = [1.0 / max(1, lang_counts.get(l, 100)) for l in df_train["language"]]
+        sampler = WeightedRandomSampler(weights=weights, num_samples=len(df_train), replacement=True)
+    else:
+        sampler = None
 
     train_ds = MasterSTTDataset(df_train, tokenizer, is_train=True)
     val_ds = MasterSTTDataset(df_val, tokenizer, is_train=False)
@@ -323,6 +406,7 @@ def main():
         train_ds,
         batch_size=CONFIG["batch_size"],
         sampler=sampler,
+        shuffle=(sampler is None),
         collate_fn=collate_fn,
         num_workers=2,
         pin_memory=True
@@ -338,15 +422,15 @@ def main():
     )
 
     # Initialize Model from Checkpoint
-    print(f"\n🧠 Loading Model Checkpoint from {checkpoint_dir} ...")
+    print(f"\n🧠 Loading Model Checkpoint from {best_ckpt} ...")
     model = Wav2Vec2ForCTC.from_pretrained(
-        checkpoint_dir,
+        best_ckpt,
         ctc_loss_reduction="mean",
         pad_token_id=tokenizer.blank_id,
         vocab_size=len(tokenizer.char_to_id)
     ).to(device)
 
-    # Freeze lower feature extractor (keep CNN stable, train Transformer + CTC Head)
+    # Freeze lower feature extractor
     model.freeze_feature_encoder()
     print("✓ Frozen CNN Feature Encoder. Training 24-Layer Transformer + CTC Head.")
 
@@ -362,7 +446,7 @@ def main():
     total_steps = (len(train_loader) // CONFIG["gradient_accumulation_steps"]) * CONFIG["epochs"]
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer,
-        T_max=total_steps,
+        T_max=max(1, total_steps),
         eta_min=CONFIG["min_learning_rate"]
     )
 
@@ -454,7 +538,6 @@ def main():
                 import json
                 json.dump({"char_to_id": tokenizer.char_to_id}, f, ensure_ascii=False, indent=2)
 
-            # Zip the model for direct download
             os.system(f"cd {CONFIG['output_dir']} && zip -r {CONFIG['zip_output']} ./*")
             print(f"✓ Model archive ready for one-click download: {CONFIG['zip_output']}\n")
 
