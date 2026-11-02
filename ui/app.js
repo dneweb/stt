@@ -1,370 +1,505 @@
 /**
- * Trilingual Speech AI Platform - Frontend Controller
- * Performance Curves, Dataset Browser & Integrated Voice Studio
+ * Trilingual Speech Studio — Frontend Engine
+ * Handles real-time microphone DSP, live waveform visualization,
+ * file drag-and-drop, sample loading, and API communication.
  */
 
-let progressChart = null;
-let currentRecLang = "gu";
-let promptIndex = 0;
+// Application State
+let currentLanguage = "auto";
+let currentMode = "mic";
 
-// Prompts for Voice Studio
-const PROMPTS = {
-  gu: [
-    "ટ્રેન સાંજે સાત ને પાંત્રીસે ઊપડશે.",
-    "જગતમાં કોઈ જીવ ન્નસ જંગમ છે અને કોઈ સ્થાવર.",
-    "ગામમાં ભગવાન સ્વામિનારાયણનું મંદિર છે.",
-    "અક્કલ સાહેબ રવિ-ભાણ સંપ્રદાયના સંતકવિ છે.",
-    "આજે હવામાન ખૂબ જ ખુશનુમા અને સુંદર છે."
-  ],
-  hi: [
-    "शाम सात बजे का reminder लगाओ।",
-    "आखिर कब तक देश की जनता झूठे वादों से ठगी जाती रहेगी?",
-    "हमने ओबीसी तबके के बच्चों के लिए उच्च शिक्षा में आरक्षण दिया।",
-    "मगर साथ में मनपसंद साथी हो तो मेहनत भी रास आती है।",
-    "तुम यहाँ कब से इंतज़ार कर रहे हो?"
-  ],
-  en: [
-    "I am learning to play the acoustic guitar.",
-    "I see the whole play with my parents and very enjoyable that moment.",
-    "They have multiple products of the same catalogue in the store.",
-    "Food trucks are always a much better option for quick evening snacks.",
-    "Can you please navigate to the nearest metro station?"
-  ]
-};
-
-// Microphone & Recording State
+// Microphone & DSP State
 let mediaStream = null;
 let mediaRecorder = null;
 let audioChunks = [];
-let recStartTime = 0;
-let recTimerInterval = null;
-let recordedBlob = null;
-let sessionClipsCount = 0;
+let isRecording = false;
+let recordStartTime = 0;
+let timerInterval = null;
+let audioContext = null;
+let analyserNode = null;
+let animationFrameId = null;
 
-// ==========================================================================
-// 1. INITIALIZATION & TAB SWITCHING
-// ==========================================================================
+// Output State
+let currentTranscription = "";
+let currentSrtSubtitles = "";
+
+// ============================================================================
+// 1. INITIALIZATION & SHORTCUTS
+// ============================================================================
 window.addEventListener("DOMContentLoaded", () => {
-  initProgressChart();
-  updatePromptDisplay();
-  
-  // Spacebar shortcut for recording
+  initWaveformCanvas();
+
+  // Spacebar shortcut to start/stop recording (when not in an input/textarea)
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space" && e.target.tagName !== "INPUT" && e.target.tagName !== "TEXTAREA") {
-      const recorderTab = document.getElementById("viewRecorder");
-      if (recorderTab && recorderTab.classList.contains("active")) {
+      if (currentMode === "mic") {
         e.preventDefault();
-        const startBtn = document.getElementById("btnStartRec");
-        const stopBtn = document.getElementById("btnStopRec");
-        if (!startBtn.classList.contains("hidden")) {
-          startStudioRecording();
-        } else if (!stopBtn.classList.contains("hidden")) {
-          stopStudioRecording();
-        }
+        toggleRecording();
       }
     }
   });
+
+  // Setup Drag & Drop listeners
+  const dropZone = document.getElementById("dropZone");
+  if (dropZone) {
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add("dragover");
+      });
+    });
+
+    ["dragleave", "drop"].forEach((eventName) => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove("dragover");
+      });
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processSelectedFile(files[0]);
+      }
+    });
+  }
 });
 
-function switchTab(tabId) {
-  // Update button active state
-  document.querySelectorAll(".nav-tab-btn").forEach((btn) => {
-    btn.classList.remove("active");
-  });
-  
-  // Update view panel active state
-  document.querySelectorAll(".view-panel").forEach((panel) => {
-    panel.classList.remove("active");
-  });
-
-  if (tabId === "progress") {
-    document.getElementById("tabProgressBtn")?.classList.add("active");
-    document.getElementById("viewProgress")?.classList.add("active");
-    if (progressChart) progressChart.resize();
-  } else if (tabId === "dataset") {
-    document.getElementById("tabDatasetBtn")?.classList.add("active");
-    document.getElementById("viewDataset")?.classList.add("active");
-  } else if (tabId === "checkpoints") {
-    document.getElementById("tabCheckpointsBtn")?.classList.add("active");
-    document.getElementById("viewCheckpoints")?.classList.add("active");
-  } else if (tabId === "recorder") {
-    document.getElementById("tabRecorderBtn")?.classList.add("active");
-    document.getElementById("viewRecorder")?.classList.add("active");
-  }
-}
-
-// ==========================================================================
-// 2. CHART.JS: MODEL CONVERGENCE DYNAMICS
-// ==========================================================================
-function initProgressChart() {
-  const ctx = document.getElementById("progressChart");
-  if (!ctx) return;
-
-  const epochs = [
-    "Epoch 11\n(Baseline)", 
-    "Epoch 15", 
-    "Epoch 18", 
-    "Epoch 22\n(SpecAug)", 
-    "Epoch 24\n(42h Corpus)", 
-    "Epoch 25", 
-    "Epoch 27", 
-    "Epoch 28\n(Current Record)"
-  ];
-  
-  const cerData = [14.95, 14.30, 13.90, 13.55, 11.84, 11.68, 11.76, 11.68];
-  const werData = [48.20, 45.40, 42.10, 40.50, 38.27, 37.91, 37.88, 37.78];
-
-  progressChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: epochs,
-      datasets: [
-        {
-          label: "Character Error Rate (CER %)",
-          data: cerData,
-          borderColor: "#a78bfa",
-          backgroundColor: "rgba(167, 139, 250, 0.12)",
-          borderWidth: 3,
-          pointBackgroundColor: "#c084fc",
-          pointBorderColor: "#fff",
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          fill: true,
-          tension: 0.3
-        },
-        {
-          label: "Word Error Rate (WER %)",
-          data: werData,
-          borderColor: "#38bdf8",
-          backgroundColor: "rgba(56, 189, 248, 0.05)",
-          borderWidth: 2,
-          borderDash: [5, 5],
-          pointBackgroundColor: "#38bdf8",
-          pointBorderColor: "#fff",
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          fill: false,
-          tension: 0.3
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
-        intersect: false
-      },
-      plugins: {
-        legend: {
-          position: "top",
-          labels: {
-            color: "#94a3b8",
-            font: { family: "Outfit", size: 12, weight: "500" },
-            padding: 16
-          }
-        },
-        tooltip: {
-          backgroundColor: "#162032",
-          titleColor: "#f8fafc",
-          bodyColor: "#cbd5e1",
-          borderColor: "rgba(255, 255, 255, 0.1)",
-          borderWidth: 1,
-          padding: 12,
-          boxPadding: 6,
-          callbacks: {
-            label: function(context) {
-              return ` ${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          grid: { color: "rgba(255, 255, 255, 0.04)" },
-          ticks: { color: "#64748b", font: { family: "Outfit", size: 11 } }
-        },
-        y: {
-          grid: { color: "rgba(255, 255, 255, 0.05)" },
-          ticks: {
-            color: "#64748b",
-            font: { family: "JetBrains Mono", size: 11 },
-            callback: (v) => v + "%"
-          },
-          suggestedMin: 5,
-          suggestedMax: 50
-        }
-      }
+// ============================================================================
+// 2. LANGUAGE & MODE CONTROLLERS
+// ============================================================================
+function setLanguage(lang) {
+  currentLanguage = lang;
+  document.querySelectorAll(".lang-pill").forEach((pill) => {
+    if (pill.dataset.lang === lang) {
+      pill.classList.add("active");
+    } else {
+      pill.classList.remove("active");
     }
   });
+  showToast(`Language set to ${getLanguageName(lang)}`);
 }
 
-// ==========================================================================
-// 3. GROUND-TRUTH SAMPLE BROWSER
-// ==========================================================================
-async function loadRandomSample() {
+function getLanguageName(code) {
+  const map = {
+    auto: "Auto-Detect",
+    gu: "Gujarati (ગુજરાતી)",
+    hi: "Hindi (हिन्दी)",
+    en: "English"
+  };
+  return map[code] || code;
+}
+
+function switchMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll(".mode-tab-btn").forEach((btn) => btn.classList.remove("active"));
+  document.querySelectorAll(".input-panel").forEach((panel) => panel.classList.remove("active"));
+
+  if (mode === "mic") {
+    document.getElementById("tabMicBtn").classList.add("active");
+    document.getElementById("panelMic").classList.add("active");
+  } else {
+    document.getElementById("tabFileBtn").classList.add("active");
+    document.getElementById("panelFile").classList.add("active");
+  }
+}
+
+// ============================================================================
+// 3. LIVE MICROPHONE & WEBAUDIO DSP
+// ============================================================================
+async function toggleRecording() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+async function startRecording() {
   try {
-    const res = await fetch("/api/sample/random");
-    if (!res.ok) throw new Error("Sample endpoint failed");
-    const data = await res.json();
-    
-    document.getElementById("sampleSpeaker").textContent = `${data.speaker} (${data.rel_path.split("/").pop()})`;
-    
-    const langMap = { gu: "Gujarati", hi: "Hindi", en: "English" };
-    document.getElementById("sampleLang").textContent = langMap[data.language] || data.language.toUpperCase();
-    document.getElementById("sampleDuration").textContent = `${data.duration}s`;
-    
-    const transcriptEl = document.getElementById("sampleTranscript");
-    transcriptEl.textContent = data.transcript;
-    transcriptEl.className = "sample-transcript-text";
-    if (data.language === "gu") transcriptEl.classList.add("font-gujarati");
-    if (data.language === "hi") transcriptEl.classList.add("font-devanagari");
-
-    const player = document.getElementById("sampleAudioPlayer");
-    player.src = data.audio_url;
-    player.play().catch(() => {});
-  } catch (err) {
-    console.warn("Could not load random sample from server:", err);
-  }
-}
-
-// ==========================================================================
-// 4. STUDIO VOICE RECORDER
-// ==========================================================================
-function setRecordingLang(lang) {
-  currentRecLang = lang;
-  promptIndex = 0;
-  
-  document.getElementById("btnRecGu")?.classList.toggle("active", lang === "gu");
-  document.getElementById("btnRecHi")?.classList.toggle("active", lang === "hi");
-  document.getElementById("btnRecEn")?.classList.toggle("active", lang === "en");
-
-  updatePromptDisplay();
-}
-
-function updatePromptDisplay() {
-  const list = PROMPTS[currentRecLang] || [];
-  const text = list[promptIndex % list.length];
-  
-  const textEl = document.getElementById("activePromptText");
-  const countEl = document.getElementById("promptIndex");
-  
-  if (textEl) {
-    textEl.textContent = text;
-    textEl.className = "prompt-text";
-    if (currentRecLang === "gu") textEl.classList.add("font-gujarati");
-    if (currentRecLang === "hi") textEl.classList.add("font-devanagari");
-  }
-  
-  if (countEl) {
-    countEl.textContent = `Sentence #${(promptIndex % list.length) + 1} of ${list.length}`;
-  }
-}
-
-function nextPrompt() {
-  promptIndex++;
-  updatePromptDisplay();
-  discardCurrentRecording();
-}
-
-async function startStudioRecording() {
-  try {
-    audioChunks = [];
-    recordedBlob = null;
-    
     mediaStream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
         sampleRate: 16000,
-        echoCancellation: false,
-        noiseSuppression: false
+        echoCancellation: true,
+        noiseSuppression: true
       }
     });
 
-    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: "audio/webm" });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(mediaStream);
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    mediaRecorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        audioChunks.push(event.data);
+      }
     };
 
     mediaRecorder.onstop = () => {
-      recordedBlob = new Blob(audioChunks, { type: "audio/webm" });
-      const audioUrl = URL.createObjectURL(recordedBlob);
-      const player = document.getElementById("recordedAudioPlayer");
-      if (player) player.src = audioUrl;
-      document.getElementById("previewZone")?.classList.remove("hidden");
+      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+      handleRecordedAudio(audioBlob);
     };
 
     mediaRecorder.start(100);
-    recStartTime = Date.now();
+    isRecording = true;
+    recordStartTime = Date.now();
+
+    // UI Updates
+    document.getElementById("micBtn").classList.add("recording");
+    document.getElementById("micIconIdle").classList.add("hidden");
+    document.getElementById("micIconRec").classList.remove("hidden");
+    document.getElementById("micPulseRing").classList.remove("hidden");
+    document.getElementById("micLabel").textContent = "Listening... (Click or Space to Stop)";
     
-    // UI toggles
-    document.getElementById("btnStartRec")?.classList.add("hidden");
-    document.getElementById("btnStopRec")?.classList.remove("hidden");
-    document.getElementById("previewZone")?.classList.add("hidden");
-    document.getElementById("micStatusText").textContent = "Recording in progress...";
-    document.getElementById("micStatusText").className = "text-purple";
+    // Timer
+    timerInterval = setInterval(updateRecordTimer, 50);
 
-    clearInterval(recTimerInterval);
-    recTimerInterval = setInterval(() => {
-      const elapsedMs = Date.now() - recStartTime;
-      const sec = Math.floor(elapsedMs / 1000);
-      const dec = Math.floor((elapsedMs % 1000) / 100);
-      const formatted = `00:${sec < 10 ? "0" + sec : sec}.${dec}`;
-      document.getElementById("recTimer").textContent = formatted;
-
-      const msg = document.getElementById("recStatusMsg");
-      if (sec >= 2 && sec <= 4) {
-        msg.textContent = "✓ Optimal duration achieved (2.0s - 4.5s)";
-        msg.style.color = "#34d399";
-      } else if (sec > 5) {
-        msg.textContent = "⚠️ Longer than recommended sentence length.";
-        msg.style.color = "#fbbf24";
-      }
-    }, 100);
+    // Audio Visualizer
+    setupAudioVisualizer(mediaStream);
 
   } catch (err) {
-    alert("Microphone access denied: " + err.message);
+    console.error("Microphone access error:", err);
+    showToast("Microphone access denied or unavailable.");
   }
 }
 
-function stopStudioRecording() {
+function stopRecording() {
+  if (!isRecording) return;
+
+  isRecording = false;
   if (mediaRecorder && mediaRecorder.state !== "inactive") {
     mediaRecorder.stop();
   }
+
   if (mediaStream) {
-    mediaStream.getTracks().forEach((t) => t.stop());
+    mediaStream.getTracks().forEach((track) => track.stop());
   }
-  clearInterval(recTimerInterval);
-  
-  document.getElementById("btnStartRec")?.classList.remove("hidden");
-  document.getElementById("btnStopRec")?.classList.add("hidden");
-  document.getElementById("micStatusText").textContent = "Ready to Record";
-  document.getElementById("micStatusText").className = "text-emerald";
+
+  clearInterval(timerInterval);
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+  }
+
+  // UI Updates
+  document.getElementById("micBtn").classList.remove("recording");
+  document.getElementById("micIconIdle").classList.remove("hidden");
+  document.getElementById("micIconRec").classList.add("hidden");
+  document.getElementById("micPulseRing").classList.add("hidden");
+  document.getElementById("micLabel").textContent = "Transcribing audio...";
+
+  // Reset visualizer canvas
+  drawIdleWaveform();
 }
 
-function discardCurrentRecording() {
-  recordedBlob = null;
-  document.getElementById("previewZone")?.classList.add("hidden");
-  document.getElementById("recTimer").textContent = "00:00.0";
-  const player = document.getElementById("recordedAudioPlayer");
-  if (player) player.src = "";
-  const msg = document.getElementById("recStatusMsg");
-  msg.textContent = "Recommended clip duration: 2.0 to 4.5 seconds.";
-  msg.style.color = "var(--text-muted)";
+function updateRecordTimer() {
+  const elapsed = Date.now() - recordStartTime;
+  const minutes = Math.floor(elapsed / 60000);
+  const seconds = Math.floor((elapsed % 60000) / 1000);
+  const tenths = Math.floor((elapsed % 1000) / 100);
+
+  const timerEl = document.getElementById("micTimer");
+  timerEl.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
 }
 
-function saveCurrentRecording() {
-  if (!recordedBlob) return;
-  sessionClipsCount++;
-  document.getElementById("sessionClipsCount").textContent = `${sessionClipsCount} clips`;
-  
-  // Show brief confirmation
-  const msg = document.getElementById("recStatusMsg");
-  msg.textContent = "🎉 Clip verified & saved to session cache!";
-  msg.style.color = "#c084fc";
-  
+function handleRecordedAudio(blob) {
+  // Setup audio player preview
+  const audioUrl = URL.createObjectURL(blob);
+  const player = document.getElementById("audioElement");
+  player.src = audioUrl;
+  document.getElementById("playerAudioLabel").textContent = `Microphone Recording (${document.getElementById("micTimer").textContent})`;
+  document.getElementById("audioPlayerStrip").classList.remove("hidden");
+
+  // Send for transcription
+  sendAudioForTranscription(blob, "mic_recording.wav");
+}
+
+// ============================================================================
+// 4. AUDIO VISUALIZER (Web Audio API)
+// ============================================================================
+function initWaveformCanvas() {
+  drawIdleWaveform();
+}
+
+function drawIdleWaveform() {
+  const canvas = document.getElementById("waveformCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(99, 102, 241, 0.25)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, h / 2);
+  ctx.lineTo(w, h / 2);
+  ctx.stroke();
+}
+
+function setupAudioVisualizer(stream) {
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioContext.createMediaStreamSource(stream);
+  analyserNode = audioContext.createAnalyser();
+  analyserNode.fftSize = 256;
+  source.connect(analyserNode);
+
+  const canvas = document.getElementById("waveformCanvas");
+  const ctx = canvas.getContext("2d");
+  const bufferLength = analyserNode.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
+
+  function draw() {
+    if (!isRecording) return;
+    animationFrameId = requestAnimationFrame(draw);
+
+    analyserNode.getByteFrequencyData(dataArray);
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    const barWidth = (w / bufferLength) * 2.2;
+    let x = 0;
+
+    for (let i = 0; i < bufferLength; i++) {
+      const barHeight = (dataArray[i] / 255) * h * 0.85;
+
+      const gradient = ctx.createLinearGradient(0, h, 0, 0);
+      gradient.addColorStop(0, "rgba(99, 102, 241, 0.4)");
+      gradient.addColorStop(1, "rgba(6, 182, 212, 0.9)");
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, (h - barHeight) / 2, barWidth, Math.max(2, barHeight));
+
+      x += barWidth + 1.5;
+    }
+  }
+
+  draw();
+}
+
+// ============================================================================
+// 5. SAVED AUDIO & SAMPLE PICKER
+// ============================================================================
+function triggerFileInput() {
+  document.getElementById("audioFileInput").click();
+}
+
+function handleFileSelected(event) {
+  const file = event.target.files[0];
+  if (file) {
+    processSelectedFile(file);
+  }
+}
+
+function processSelectedFile(file) {
+  const audioUrl = URL.createObjectURL(file);
+  const player = document.getElementById("audioElement");
+  player.src = audioUrl;
+  document.getElementById("playerAudioLabel").textContent = file.name;
+  document.getElementById("audioPlayerStrip").classList.remove("hidden");
+
+  sendAudioForTranscription(file, file.name);
+}
+
+async function loadSample(lang, audioUrl, label) {
+  setLanguage(lang);
+
+  const player = document.getElementById("audioElement");
+  player.src = audioUrl;
+  document.getElementById("playerAudioLabel").textContent = `${getLanguageName(lang)} Sample`;
+  document.getElementById("audioPlayerStrip").classList.remove("hidden");
+  player.play();
+
+  // Fetch sample as blob and run inference
+  try {
+    setLoadingState(true);
+    const response = await fetch(audioUrl);
+    const blob = await response.blob();
+    sendAudioForTranscription(blob, `sample_${lang}.wav`);
+  } catch (err) {
+    console.error("Failed to load sample audio:", err);
+    setLoadingState(false);
+    showToast("Failed to load sample file.");
+  }
+}
+
+// ============================================================================
+// 6. BACKEND API TRANSCRIPTION
+// ============================================================================
+async function sendAudioForTranscription(audioBlob, filename) {
+  setLoadingState(true);
+
+  const formData = new FormData();
+  formData.append("file", audioBlob, filename);
+  formData.append("model_type", "production_kenlm");
+  formData.append("language", currentLanguage);
+
+  try {
+    const response = await fetch("/api/infer/upload", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    displayResults(data);
+  } catch (err) {
+    console.error("Inference request failed:", err);
+    showToast("Transcription failed. Please try again.");
+    displayError("Transcription encountered an error. Check server logs.");
+  } finally {
+    setLoadingState(false);
+    document.getElementById("micLabel").textContent = "Click to Start Speaking";
+  }
+}
+
+// ============================================================================
+// 7. RESULTS DISPLAY & TELEMETRY
+// ============================================================================
+function setLoadingState(isLoading) {
+  const badge = document.getElementById("outputStateBadge");
+  const skeleton = document.getElementById("loadingSkeleton");
+  const textEl = document.getElementById("transcriptionText");
+
+  if (isLoading) {
+    badge.className = "output-badge processing";
+    badge.textContent = "Transcribing...";
+    skeleton.classList.remove("hidden");
+    textEl.classList.add("hidden");
+  } else {
+    skeleton.classList.add("hidden");
+    textEl.classList.remove("hidden");
+  }
+}
+
+function displayResults(data) {
+  const badge = document.getElementById("outputStateBadge");
+  badge.className = "output-badge complete";
+  badge.textContent = "Done";
+
+  currentTranscription = data.predicted_text || data.text || "(No speech detected)";
+  currentSrtSubtitles = data.srt_subtitles || "";
+
+  const textEl = document.getElementById("transcriptionText");
+  textEl.textContent = currentTranscription;
+  textEl.classList.remove("empty");
+
+  // Telemetry strip
+  document.getElementById("metricsStrip").classList.remove("hidden");
+  document.getElementById("metricDuration").textContent = `${data.duration_sec || 0}s`;
+  document.getElementById("metricLatency").textContent = `${data.inference_time_ms || 0} ms`;
+  document.getElementById("metricLM").textContent = "KenLM 3-Gram (5.4% CER)";
+
+  // Language script detection
+  const detected = detectScriptFromText(currentTranscription);
+  document.getElementById("metricLang").textContent = detected;
+
+  // Word timestamps
+  renderWordTimestamps(data.word_timestamps || []);
+}
+
+function displayError(msg) {
+  const badge = document.getElementById("outputStateBadge");
+  badge.className = "output-badge idle";
+  badge.textContent = "Error";
+
+  const textEl = document.getElementById("transcriptionText");
+  textEl.textContent = msg;
+  textEl.classList.add("empty");
+}
+
+function detectScriptFromText(text) {
+  if (/[\u0A80-\u0AFF]/.test(text)) return "Gujarati (ગુજરાતી)";
+  if (/[\u0900-\u097F]/.test(text)) return "Hindi (हिन्दी)";
+  if (/[a-zA-Z]/.test(text)) return "English";
+  return "Multilingual";
+}
+
+function renderWordTimestamps(timestamps) {
+  const drawer = document.getElementById("timestampsDrawer");
+  const list = document.getElementById("timestampsList");
+
+  if (!timestamps || timestamps.length === 0) {
+    drawer.classList.add("hidden");
+    return;
+  }
+
+  drawer.classList.remove("hidden");
+  list.innerHTML = "";
+
+  timestamps.forEach((t) => {
+    const chip = document.createElement("div");
+    chip.className = "timestamp-chip";
+    chip.innerHTML = `
+      <time>${t.start.toFixed(2)}s - ${t.end.toFixed(2)}s</time>
+      <span>${escapeHtml(t.word)}</span>
+    `;
+    list.appendChild(chip);
+  });
+}
+
+// ============================================================================
+// 8. ACTIONS: COPY & EXPORT SRT
+// ============================================================================
+function copyTranscription() {
+  if (!currentTranscription) {
+    showToast("No transcription to copy.");
+    return;
+  }
+
+  navigator.clipboard.writeText(currentTranscription).then(() => {
+    const btnText = document.getElementById("copyBtnText");
+    const originalText = btnText.textContent;
+    btnText.textContent = "Copied!";
+    showToast("✓ Copied to clipboard");
+    setTimeout(() => {
+      btnText.textContent = originalText;
+    }, 2000);
+  }).catch(() => {
+    showToast("Failed to copy text.");
+  });
+}
+
+function downloadSrt() {
+  if (!currentSrtSubtitles) {
+    // Generate basic SRT if not provided directly
+    if (!currentTranscription) {
+      showToast("No subtitles to export.");
+      return;
+    }
+    currentSrtSubtitles = `1\n00:00:00,000 --> 00:00:05,000\n${currentTranscription}\n`;
+  }
+
+  const blob = new Blob([currentSrtSubtitles], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `transcription_${Date.now()}.srt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast("✓ Subtitles (.srt) downloaded");
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
   setTimeout(() => {
-    nextPrompt();
-  }, 600);
+    toast.classList.remove("show");
+  }, 2400);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
 }

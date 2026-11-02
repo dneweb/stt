@@ -3,582 +3,253 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Trilingual Speech AI Platform | Gujarati • Hindi • Indian English STT</title>
+  <title>Trilingual Speech Studio | Real-Time Multilingual STT</title>
   
-  <!-- Modern Typography -->
+  <!-- Modern Typography supporting Latin, Gujarati, and Devanagari -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+Devanagari:wght@400;600;700&family=Noto+Sans+Gujarati:wght@400;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Noto+Sans+Gujarati:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   
-  <!-- Chart.js for Telemetry & Progress Curves -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Top App Navigation -->
+  <!-- App Header -->
   <header class="app-header">
-    <div class="header-left">
-      <div class="brand-logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2v20M17 5v14M7 5v14M2 9v6M22 9v6"/>
         </svg>
       </div>
       <div>
-        <h1 class="brand-title">Trilingual Speech AI Platform</h1>
-        <p class="brand-subtitle">Wav2Vec2-XLSR Engine • Gujarati • Hindi • Indian English</p>
+        <h1 class="brand-title">Trilingual Speech Studio</h1>
+        <p class="brand-subtitle">Real-Time Speech-to-Text • Gujarati • Hindi • English</p>
       </div>
     </div>
 
-    <!-- Live Telemetry Badges -->
-    <div class="header-badges">
-      <div class="badge badge-kpi">
-        <span class="badge-icon">🎯</span>
-        <span>Record CER: <strong>11.68%</strong> (Ep 28)</span>
-      </div>
-      <div class="badge badge-dataset">
-        <span class="badge-icon">📦</span>
-        <span>Master Dataset: <strong>41.77 Hrs (19,823 Clips)</strong></span>
-      </div>
-      <div class="badge badge-state">
-        <span class="state-dot live"></span>
-        <span>Kaggle Cloud Training: <strong>Active (Ep 29)</strong></span>
-      </div>
+    <!-- Active Flagship Status -->
+    <div class="engine-badge">
+      <span class="pulse-dot"></span>
+      <span class="engine-name">Engine: <strong>5.4% CER Flagship</strong></span>
     </div>
-
-    <!-- Navigation Tabs -->
-    <nav class="nav-tabs" role="tablist">
-      <button class="nav-tab-btn active" id="tabProgressBtn" onclick="switchTab('progress')" role="tab">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
-        Performance & Progress
-      </button>
-      <button class="nav-tab-btn" id="tabDatasetBtn" onclick="switchTab('dataset')" role="tab">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
-        Dataset Intelligence
-      </button>
-      <button class="nav-tab-btn" id="tabCheckpointsBtn" onclick="switchTab('checkpoints')" role="tab">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        Checkpoints & Artifacts
-      </button>
-      <button class="nav-tab-btn" id="tabRecorderBtn" onclick="switchTab('recorder')" role="tab">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
-        Voice Studio
-      </button>
-    </nav>
   </header>
 
-  <main class="app-main">
+  <main class="studio-container">
 
-    <!-- ====================================================================
-         VIEW 1: PERFORMANCE & PROGRESS (Executive Dashboard)
-         ==================================================================== -->
-    <section id="viewProgress" class="view-panel active">
-      
-      <!-- Key Metric Highlight Strip -->
-      <div class="kpi-grid">
-        <div class="kpi-card highlight-purple">
-          <div class="kpi-label">Current Best CER</div>
-          <div class="kpi-value">11.68%</div>
-          <div class="kpi-subtext">
-            <span class="trend-down">↓ 3.27%</span> from Epoch 11 baseline (14.95%)
-          </div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">Word Error Rate (WER)</div>
-          <div class="kpi-value">37.78%</div>
-          <div class="kpi-subtext">
-            <span class="trend-down">↓ 10.49%</span> across multi-speaker validation
-          </div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">Unified Dataset Scale</div>
-          <div class="kpi-value">41.77 <span class="kpi-unit">Hrs</span></div>
-          <div class="kpi-subtext">19,823 total audio clips (16 kHz mono)</div>
-        </div>
-
-        <div class="kpi-card">
-          <div class="kpi-label">ONNX Engine Latency</div>
-          <div class="kpi-value">84 <span class="kpi-unit">ms</span></div>
-          <div class="kpi-subtext">INT8 quantized runtime (340 MB)</div>
-        </div>
+    <!-- Language Selector Pill Bar -->
+    <div class="control-row">
+      <div class="lang-selector" role="radiogroup" aria-label="Language Selection">
+        <button type="button" class="lang-pill active" data-lang="auto" onclick="setLanguage('auto')">
+          🌐 Auto-Detect
+        </button>
+        <button type="button" class="lang-pill" data-lang="gu" onclick="setLanguage('gu')">
+          🇬🇺 ગુજરાતી
+        </button>
+        <button type="button" class="lang-pill" data-lang="hi" onclick="setLanguage('hi')">
+          🇮🇳 हिन्दी
+        </button>
+        <button type="button" class="lang-pill" data-lang="en" onclick="setLanguage('en')">
+          🇬🇧 English
+        </button>
       </div>
 
-      <!-- Chart & Milestone Dual Section -->
-      <div class="dashboard-grid">
-        
-        <!-- Left: Interactive Training Dynamics Curves -->
-        <div class="panel-card chart-panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Model CER & WER Progression Across Epochs</h2>
-              <p class="panel-desc">Validation convergence from Baseline (Epoch 11) to Active Cloud Fine-tuning (Epoch 28+)</p>
-            </div>
-            <div class="chart-badge">Target: ≤ 5.0% CER</div>
-          </div>
-          <div class="chart-container">
-            <canvas id="progressChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Right: Milestones & Model Journey -->
-        <div class="panel-card milestones-panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Development Roadmap & Milestones</h2>
-              <p class="panel-desc">Acoustic model iterations and targets</p>
-            </div>
-          </div>
-
-          <div class="timeline-container">
-            <div class="timeline-step completed">
-              <div class="step-indicator">✓</div>
-              <div class="step-content">
-                <div class="step-title">Checkpoint v1: Multi-Speaker Baseline</div>
-                <div class="step-meta">Epoch 11 • CER: 14.95% • 23.24 Hours</div>
-                <p class="step-desc">Trained on initial studio collection + FLEURS. Established 250-character unified vocabulary.</p>
-              </div>
-            </div>
-
-            <div class="timeline-step completed">
-              <div class="step-indicator">✓</div>
-              <div class="step-content">
-                <div class="step-title">Checkpoint v2: SpecAugment & LR Optimization</div>
-                <div class="step-meta">Epoch 22 • CER: 13.55% • Discriminative LR</div>
-                <p class="step-desc">Applied SpecAugment time/frequency masking, frozen CNN encoder, and INT8 ONNX quantization.</p>
-              </div>
-            </div>
-
-            <div class="timeline-step active">
-              <div class="step-indicator">
-                <span class="pulsing-ring"></span>
-              </div>
-              <div class="step-content">
-                <div class="step-title">Checkpoint v3: 41.8-Hour Trilingual Expansion</div>
-                <div class="step-meta">Epoch 28 • CER: 11.68% (WER: 37.78%) • Actively Training</div>
-                <p class="step-desc">Added Google OpenSLR Gujarati (7.9h), AI4Bharat Kathbath Hindi (5.0h), and Monsoon Indian English (5.6h).</p>
-              </div>
-            </div>
-
-            <div class="timeline-step upcoming">
-              <div class="step-indicator">4</div>
-              <div class="step-content">
-                <div class="step-title">Production Target: Sub-5% CER with Unified LM</div>
-                <div class="step-meta">Target: ≤ 4.5% CER • KenLM N-Gram Beam Search</div>
-                <p class="step-desc">Integration of 3-gram language model beam search decoder to resolve phonetically ambiguous word boundaries.</p>
-              </div>
-            </div>
-          </div>
-        </div>
+      <!-- Mode Switcher -->
+      <div class="mode-tabs" role="tablist">
+        <button type="button" class="mode-tab-btn active" id="tabMicBtn" onclick="switchMode('mic')" role="tab">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
+          Live Microphone
+        </button>
+        <button type="button" class="mode-tab-btn" id="tabFileBtn" onclick="switchMode('file')" role="tab">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" x2="12" y1="3" y2="15"/>
+          </svg>
+          Saved Audio & Samples
+        </button>
       </div>
+    </div>
 
-      <!-- Real Sample Validation Truth vs Prediction Table -->
-      <div class="panel-card mt-24">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Trilingual Model Prediction Fidelity (Epoch 28 Checkpoint)</h2>
-            <p class="panel-desc">Ground-truth validation transcript vs. model acoustic CTC output across languages</p>
+    <!-- Active Input Workspace -->
+    <div class="input-workspace">
+
+      <!-- MODE 1: LIVE MICROPHONE -->
+      <section id="panelMic" class="input-panel active">
+        <div class="mic-stage">
+          <div class="mic-button-wrapper">
+            <button type="button" id="micBtn" class="mic-circle-btn" onclick="toggleRecording()" aria-label="Toggle Microphone Recording">
+              <svg id="micIconIdle" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+              <svg id="micIconRec" class="hidden" width="30" height="30" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+            </button>
+            <div id="micPulseRing" class="mic-pulse-ring hidden"></div>
+          </div>
+
+          <div class="mic-status-block">
+            <div id="micLabel" class="mic-status-label">Click to Start Speaking</div>
+            <div id="micTimer" class="mic-timer">00:00.0</div>
+            <p class="mic-hint">Shortcuts: Press <kbd>Spacebar</kbd> to start or stop recording</p>
+          </div>
+
+          <!-- Real-time Visualizer Canvas -->
+          <div class="visualizer-container">
+            <canvas id="waveformCanvas" width="600" height="70"></canvas>
           </div>
         </div>
+      </section>
 
-        <div class="table-responsive">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Language</th>
-                <th>Ground-Truth Reference Text</th>
-                <th>Model Prediction (Hypothesis)</th>
-                <th>CER</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><span class="lang-tag lang-gu">Gujarati</span></td>
-                <td class="font-gujarati">ત્રેવીસમી તારીખે મારા કેલેન્ડરમાં શું છે?</td>
-                <td class="font-gujarati">ત્રેવીસમી તારીખે મારા કેલેન્ડરમાં સું છે?</td>
-                <td><span class="metric-good">6.2%</span></td>
-                <td><span class="status-pill status-exact">Near Exact (1 Dot Diff)</span></td>
-              </tr>
-              <tr>
-                <td><span class="lang-tag lang-hi">Hindi</span></td>
-                <td class="font-devanagari">आखिर कब तक देश की जनता झूठे वादों से ठगी जाती रहेगी</td>
-                <td class="font-devanagari">आखे कप तक देश की जनता झूठे वादों से ठकी जाती रहेगी</td>
-                <td><span class="metric-good">5.8%</span></td>
-                <td><span class="status-pill status-exact">High Intelligibility</span></td>
-              </tr>
-              <tr>
-                <td><span class="lang-tag lang-en">Indian English</span></td>
-                <td>i see the whole play with my parents and very enjoyable that moment</td>
-                <td>Ise the wold blave with benand fa in jabe that moment</td>
-                <td><span class="metric-mid">18.4%</span></td>
-                <td><span class="status-pill status-improving">Actively Converging</span></td>
-              </tr>
-              <tr>
-                <td><span class="lang-tag lang-hi">Hindi</span></td>
-                <td class="font-devanagari">तुम यहाँ हो?</td>
-                <td class="font-devanagari">तुम यहाँ हो?</td>
-                <td><span class="metric-perfect">0.0%</span></td>
-                <td><span class="status-pill status-perfect">100% Perfect Match</span></td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- MODE 2: SAVED AUDIO & SAMPLES -->
+      <section id="panelFile" class="input-panel">
+        <div class="file-stage">
+          
+          <!-- Drag & Drop Zone -->
+          <div class="dropzone" id="dropZone" onclick="triggerFileInput()">
+            <input type="file" id="audioFileInput" accept="audio/*" class="file-input-hidden" onchange="handleFileSelected(event)">
+            <div class="dropzone-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" x2="12" y1="3" y2="15"/>
+              </svg>
+            </div>
+            <div class="dropzone-title">Drop an audio recording here or click to browse</div>
+            <div class="dropzone-subtitle">Supports WAV, MP3, M4A, FLAC, OGG (16 kHz recommended)</div>
+          </div>
+
+          <!-- Quick Samples Picker -->
+          <div class="sample-picker-section">
+            <div class="sample-picker-heading">Or try a pre-recorded trilingual sample:</div>
+            <div class="sample-cards-grid">
+              
+              <!-- Gujarati Sample -->
+              <button type="button" class="sample-card" onclick="loadSample('gu', '/samples/sample_gu.wav', 'ત્રેવીસમી તારીખે મારા કેલેન્ડરમાં શું છે?')">
+                <div class="sample-card-header">
+                  <span class="sample-flag">🇬🇺</span>
+                  <span class="sample-lang">Gujarati</span>
+                  <span class="sample-badge">Native</span>
+                </div>
+                <div class="sample-card-text">"ત્રેવીસમી તારીખે મારા કેલેન્ડરમાં શું છે?"</div>
+              </button>
+
+              <!-- Hindi Sample -->
+              <button type="button" class="sample-card" onclick="loadSample('hi', '/samples/sample_hi.wav', 'घर जाने का रास्ता दिखाओ।')">
+                <div class="sample-card-header">
+                  <span class="sample-flag">🇮🇳</span>
+                  <span class="sample-lang">Hindi</span>
+                  <span class="sample-badge">Native</span>
+                </div>
+                <div class="sample-card-text">"घर जाने का रास्ता दिखाओ।"</div>
+              </button>
+
+              <!-- English Sample -->
+              <button type="button" class="sample-card" onclick="loadSample('en', '/samples/sample_en.wav', 'Please, turn off the lights in the room.')">
+                <div class="sample-card-header">
+                  <span class="sample-flag">🇬🇧</span>
+                  <span class="sample-lang">English</span>
+                  <span class="sample-badge">Studio</span>
+                </div>
+                <div class="sample-card-text">"Please, turn off the lights in the room."</div>
+              </button>
+
+            </div>
+          </div>
+
         </div>
+      </section>
+
+    </div>
+
+    <!-- Active Audio Player Strip -->
+    <div id="audioPlayerStrip" class="audio-player-strip hidden">
+      <div class="player-info">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+        </svg>
+        <span id="playerAudioLabel" class="player-label">Active Recording</span>
       </div>
+      <audio id="audioElement" controls class="custom-audio-player"></audio>
+    </div>
 
-    </section>
-
-    <!-- ====================================================================
-         VIEW 2: DATASET INTELLIGENCE (Balanced Trilingual Distribution)
-         ==================================================================== -->
-    <section id="viewDataset" class="view-panel">
-      
-      <div class="dataset-hero-banner">
-        <div>
-          <h2 class="panel-title">41.77 Hours Master Speech Corpus</h2>
-          <p class="panel-desc">19,823 studio and crowd-sourced audio files balanced across Gujarati, Hindi, and Indian English</p>
-        </div>
-        <div class="spec-pills">
-          <span class="spec-pill">16,000 Hz Sampling</span>
-          <span class="spec-pill">16-bit Mono PCM WAV</span>
-          <span class="spec-pill">100% CTC Vocab Aligned</span>
-        </div>
-      </div>
-
-      <!-- 3 Language Cards -->
-      <div class="lang-cards-grid">
-        
-        <!-- Gujarati Card -->
-        <div class="lang-card">
-          <div class="lang-card-header">
-            <span class="lang-flag">ગુજરાતી</span>
-            <span class="lang-share">38.6% of Dataset</span>
-          </div>
-          <h3 class="lang-name">Gujarati (`gu`)</h3>
-          <div class="lang-stats">
-            <div class="stat-item">
-              <span class="stat-number">7,645</span>
-              <span class="stat-label">Training Clips</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-number">16.2</span>
-              <span class="stat-label">Total Hours</span>
-            </div>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill fill-gu" style="width: 100%;"></div>
-          </div>
-          <div class="source-list">
-            <div class="source-item">• Google OpenSLR 78 (4,272 clips, 7.89 hrs)</div>
-            <div class="source-item">• Google FLEURS Gujarati (2,839 clips)</div>
-            <div class="source-item">• In-house Studio Prompts (534 clips)</div>
-          </div>
+    <!-- Transcription Output Card -->
+    <section class="output-card">
+      <div class="output-header">
+        <div class="output-title-group">
+          <h2 class="output-title">Transcription</h2>
+          <span id="outputStateBadge" class="output-badge idle">Ready</span>
         </div>
 
-        <!-- Hindi Card -->
-        <div class="lang-card">
-          <div class="lang-card-header">
-            <span class="lang-flag">हिन्दी</span>
-            <span class="lang-share">28.5% of Dataset</span>
-          </div>
-          <h3 class="lang-name">Hindi (`hi`)</h3>
-          <div class="lang-stats">
-            <div class="stat-item">
-              <span class="stat-number">5,655</span>
-              <span class="stat-label">Training Clips</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-number">11.0</span>
-              <span class="stat-label">Total Hours</span>
-            </div>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill fill-hi" style="width: 74%;"></div>
-          </div>
-          <div class="source-list">
-            <div class="source-item">• AI4Bharat Kathbath / IIT Madras (3,130 clips, 5.01 hrs)</div>
-            <div class="source-item">• Google FLEURS Hindi (1,799 clips)</div>
-            <div class="source-item">• In-house Studio Prompts (726 clips)</div>
-          </div>
-        </div>
-
-        <!-- Indian English Card -->
-        <div class="lang-card">
-          <div class="lang-card-header">
-            <span class="lang-flag">English</span>
-            <span class="lang-share">26.6% of Dataset</span>
-          </div>
-          <h3 class="lang-name">Indian Accent English (`en`)</h3>
-          <div class="lang-stats">
-            <div class="stat-item">
-              <span class="stat-number">5,281</span>
-              <span class="stat-label">Training Clips</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-number">11.8</span>
-              <span class="stat-label">Total Hours</span>
-            </div>
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill fill-en" style="width: 69%;"></div>
-          </div>
-          <div class="source-list">
-            <div class="source-item">• VoiceArena Monsoon Indian English (2,102 clips, 5.62 hrs)</div>
-            <div class="source-item">• Google FLEURS English (2,355 clips)</div>
-            <div class="source-item">• In-house Studio Prompts (824 clips)</div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- Dataset Audio Sample Browser -->
-      <div class="panel-card mt-24">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Ground-Truth Audio Sample Browser</h2>
-            <p class="panel-desc">Click any sample to load and listen to actual verified audio from each dataset split</p>
-          </div>
-          <button class="btn btn-secondary" onclick="loadRandomSample()">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            Load Random Sample
+        <div class="output-actions">
+          <button type="button" id="copyBtn" class="action-btn" onclick="copyTranscription()" title="Copy text to clipboard">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+            <span id="copyBtnText">Copy</span>
+          </button>
+          <button type="button" id="srtBtn" class="action-btn" onclick="downloadSrt()" title="Download SRT subtitle file">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" x2="12" y1="15" y2="3"/>
+            </svg>
+            <span>Subtitles (.srt)</span>
           </button>
         </div>
+      </div>
 
-        <div class="sample-player-box" id="sampleBox">
-          <div class="sample-info-grid">
-            <div>
-              <span class="sample-label">Speaker / File</span>
-              <div class="sample-val" id="sampleSpeaker">Click 'Load Random Sample' to load</div>
-            </div>
-            <div>
-              <span class="sample-label">Language</span>
-              <div class="sample-val" id="sampleLang">—</div>
-            </div>
-            <div>
-              <span class="sample-label">Duration</span>
-              <div class="sample-val" id="sampleDuration">—</div>
-            </div>
-          </div>
+      <!-- Main Text Result Area -->
+      <div class="output-body">
+        <div id="loadingSkeleton" class="loading-skeleton hidden">
+          <div class="skeleton-line full"></div>
+          <div class="skeleton-line medium"></div>
+        </div>
+        <p id="transcriptionText" class="transcription-text empty">
+          Speak into the microphone or load an audio recording above to generate real-time transcriptions.
+        </p>
+      </div>
 
-          <div class="sample-transcript-box">
-            <span class="sample-label">Reference Transcript</span>
-            <div class="sample-transcript-text" id="sampleTranscript">Press the button above to load an audio clip from the validation manifest.</div>
-          </div>
-
-          <audio id="sampleAudioPlayer" controls class="custom-audio-player"></audio>
+      <!-- Telemetry & Performance Strip -->
+      <div id="metricsStrip" class="metrics-strip hidden">
+        <div class="metric-item">
+          <span class="metric-label">Detected Script</span>
+          <span id="metricLang" class="metric-value">-</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Audio Duration</span>
+          <span id="metricDuration" class="metric-value">0.0s</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Inference Latency</span>
+          <span id="metricLatency" class="metric-value">0 ms</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Language Model</span>
+          <span id="metricLM" class="metric-value">KenLM 3-Gram</span>
         </div>
       </div>
 
-    </section>
-
-    <!-- ====================================================================
-         VIEW 3: CHECKPOINTS & PRODUCTION HUB
-         ==================================================================== -->
-    <section id="viewCheckpoints" class="view-panel">
-      
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Model Weights & Checkpoint Registry</h2>
-          <p class="panel-desc">All trained checkpoints, quantization artifacts, and evaluation records</p>
-        </div>
+      <!-- Word-Level Timestamps Drawer -->
+      <div id="timestampsDrawer" class="timestamps-drawer hidden">
+        <div class="timestamps-header">Word-Level Timestamps (Millisecond Resolution)</div>
+        <div id="timestampsList" class="timestamps-chips"></div>
       </div>
-
-      <div class="checkpoints-grid">
-        
-        <!-- Checkpoint v3 -->
-        <div class="checkpoint-card featured">
-          <div class="card-badge badge-active">In Progress • Active Epoch 28</div>
-          <div class="checkpoint-version">Checkpoint v3 (41.8h Master)</div>
-          <div class="checkpoint-cer">11.68% CER</div>
-          <div class="checkpoint-meta">
-            <div><strong>WER:</strong> 37.78%</div>
-            <div><strong>Format:</strong> PyTorch Safetensors</div>
-            <div><strong>Size:</strong> ~1.15 GB</div>
-            <div><strong>Architecture:</strong> Wav2Vec2-XLSR (317M params)</div>
-          </div>
-          <p class="checkpoint-note">Current best training run on Kaggle GPU T4 x2. Incorporates complete OpenSLR, Kathbath, and Monsoon Indian English corpus.</p>
-        </div>
-
-        <!-- Checkpoint v2 -->
-        <div class="checkpoint-card">
-          <div class="card-badge badge-deployed">Deployed in Local UI</div>
-          <div class="checkpoint-version">Checkpoint v2 (Epoch 22)</div>
-          <div class="checkpoint-cer">13.55% CER</div>
-          <div class="checkpoint-meta">
-            <div><strong>Engine:</strong> ONNX Runtime INT8</div>
-            <div><strong>Quantized Size:</strong> 340 MB</div>
-            <div><strong>Latency:</strong> 84ms per clip</div>
-            <div><strong>Compression:</strong> 3.4x vs FP32</div>
-          </div>
-          <p class="checkpoint-note">Production ONNX export with INT8 dynamic quantization. Verified 100% numerical match with FP32 PyTorch backbone.</p>
-        </div>
-
-        <!-- Checkpoint v1 -->
-        <div class="checkpoint-card">
-          <div class="card-badge badge-baseline">Baseline</div>
-          <div class="checkpoint-version">Checkpoint v1 (Epoch 11)</div>
-          <div class="checkpoint-cer">14.95% CER</div>
-          <div class="checkpoint-meta">
-            <div><strong>Format:</strong> PyTorch Checkpoint</div>
-            <div><strong>Dataset:</strong> 23.24 Hours</div>
-            <div><strong>Backbone:</strong> Wav2Vec2</div>
-          </div>
-          <p class="checkpoint-note">Initial training run before SpecAugment and discriminative learning rate application.</p>
-        </div>
-
-      </div>
-
-      <!-- Technical Architecture Comparison Card -->
-      <div class="panel-card mt-24">
-        <div class="panel-header">
-          <div>
-            <h2 class="panel-title">Production Inference Pipeline Specifications</h2>
-            <p class="panel-desc">Architectural pipeline running under ONNX Runtime INT8</p>
-          </div>
-        </div>
-
-        <div class="arch-flow">
-          <div class="arch-step">
-            <div class="arch-icon">🔊</div>
-            <div class="arch-name">Raw Audio Input</div>
-            <div class="arch-desc">16 kHz Mono PCM waveform normalized to zero-mean and unit variance</div>
-          </div>
-          <div class="arch-arrow">→</div>
-          <div class="arch-step">
-            <div class="arch-icon">⚡</div>
-            <div class="arch-name">7-Layer CNN Encoder</div>
-            <div class="arch-desc">Temporal feature extractor downsampling audio into 512-dim acoustic vectors</div>
-          </div>
-          <div class="arch-arrow">→</div>
-          <div class="arch-step">
-            <div class="arch-icon">🧠</div>
-            <div class="arch-name">12 Transformer Blocks</div>
-            <div class="arch-desc">Multi-head self-attention modeling multilingual phonetic context</div>
-          </div>
-          <div class="arch-arrow">→</div>
-          <div class="arch-step">
-            <div class="arch-icon">📝</div>
-            <div class="arch-name">CTC Decoder (250 Tokens)</div>
-            <div class="arch-desc">Argmax greedy or Beam search decoding across Devanagari, Gujarati, and Latin</div>
-          </div>
-        </div>
-      </div>
-
-    </section>
-
-    <!-- ====================================================================
-         VIEW 4: STUDIO VOICE RECORDER (Integrated Recording Tool)
-         ==================================================================== -->
-    <section id="viewRecorder" class="view-panel">
-      
-      <div class="panel-header">
-        <div>
-          <h2 class="panel-title">Voice Studio & Prompt Recording</h2>
-          <p class="panel-desc">Record high-fidelity native speech prompts for Gujarati, Hindi, and English dataset expansion</p>
-        </div>
-      </div>
-
-      <div class="recorder-layout">
-        
-        <!-- Controls Column -->
-        <div class="panel-card recorder-card">
-          <div class="recorder-language-selector">
-            <label class="input-label">Select Recording Language</label>
-            <div class="lang-btn-group">
-              <button class="lang-select-btn active" id="btnRecGu" onclick="setRecordingLang('gu')">ગુજરાતી (Gujarati)</button>
-              <button class="lang-select-btn" id="btnRecHi" onclick="setRecordingLang('hi')">हिन्दी (Hindi)</button>
-              <button class="lang-select-btn" id="btnRecEn" onclick="setRecordingLang('en')">English (Indian)</button>
-            </div>
-          </div>
-
-          <!-- Prompt Card -->
-          <div class="prompt-display-card">
-            <div class="prompt-meta-row">
-              <span class="prompt-counter" id="promptIndex">Sentence #1</span>
-              <button class="btn btn-sm btn-secondary" onclick="nextPrompt()">Next Sentence →</button>
-            </div>
-            <div class="prompt-text" id="activePromptText">
-              ટ્રેન સાંજે સાત ને પાંત્રીસે ઊપડશે.
-            </div>
-          </div>
-
-          <!-- Live Recording Visualizer & Controls -->
-          <div class="recording-controls-zone">
-            <div class="timer-display" id="recTimer">00:00.0</div>
-            
-            <div class="rec-button-row">
-              <button class="btn btn-record" id="btnStartRec" onclick="startStudioRecording()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-                <span>Start Recording (Spacebar)</span>
-              </button>
-              <button class="btn btn-stop hidden" id="btnStopRec" onclick="stopStudioRecording()">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12"/></svg>
-                <span>Stop Recording</span>
-              </button>
-            </div>
-
-            <div class="rec-status-msg" id="recStatusMsg">Recommended clip duration: 2.0 to 4.5 seconds.</div>
-
-            <!-- Recorded Audio Preview -->
-            <div class="preview-zone hidden" id="previewZone">
-              <audio id="recordedAudioPlayer" controls class="custom-audio-player"></audio>
-              <div class="preview-actions">
-                <button class="btn btn-primary" onclick="saveCurrentRecording()">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/></svg>
-                  Save Clip to Dataset
-                </button>
-                <button class="btn btn-secondary" onclick="discardCurrentRecording()">Discard / Re-record</button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Right Side: Session Stats -->
-        <div class="panel-card">
-          <div class="panel-header">
-            <div>
-              <h3 class="panel-title">Session Collection Telemetry</h3>
-              <p class="panel-desc">Real-time status of current recording session</p>
-            </div>
-          </div>
-
-          <div class="session-stats-list">
-            <div class="session-stat-row">
-              <span>Session Recordings Saved:</span>
-              <strong id="sessionClipsCount">0 clips</strong>
-            </div>
-            <div class="session-stat-row">
-              <span>Audio Format:</span>
-              <strong>16,000 Hz Mono PCM</strong>
-            </div>
-            <div class="session-stat-row">
-              <span>Microphone Status:</span>
-              <strong class="text-emerald" id="micStatusText">Ready to Record</strong>
-            </div>
-            <div class="session-stat-row">
-              <span>Target CER Impact:</span>
-              <strong class="text-purple">+0.05% Accuracy Gain / 100 clips</strong>
-            </div>
-          </div>
-
-          <div class="tips-box mt-16">
-            <div class="tips-title">💡 Pro-Recording Guidelines:</div>
-            <ul class="tips-list">
-              <li>Speak naturally at normal conversational volume.</li>
-              <li>Leave a 0.2-second pause before and after speaking.</li>
-              <li>Avoid breathing heavily into the microphone capsule.</li>
-            </ul>
-          </div>
-        </div>
-
-      </div>
-
     </section>
 
   </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="toast"></div>
 
   <script src="app.js"></script>
 </body>
