@@ -400,7 +400,7 @@ function displayResults(data) {
   document.getElementById("metricsStrip").classList.remove("hidden");
   document.getElementById("metricDuration").textContent = `${data.duration_sec || 0}s`;
   document.getElementById("metricLatency").textContent = `${data.inference_time_ms || 0} ms`;
-  document.getElementById("metricLM").textContent = "KenLM 3-Gram (5.4% CER)";
+  document.getElementById("metricLM").textContent = "Master Acoustic + KenLM (11.4% Raw CER)";
 
   // Language script detection
   const detected = detectScriptFromText(currentTranscription);

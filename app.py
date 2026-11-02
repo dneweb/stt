@@ -498,8 +498,8 @@ def run_production_stt_inference(audio_path: Path, language: str = "auto"):
             "lm_text": res.get("lm_text", ""),
             "duration_sec": round(res.get("duration", 0.0), 2),
             "inference_time_ms": round(res.get("inference_time", 0.0) * 1000, 1),
-            "device": "PyTorch CPU + KenLM Beam Search",
-            "model_name": "Enterprise Trilingual STT (5.4% CER Flagship)",
+            "device": "PyTorch CPU + Adaptive KenLM",
+            "model_name": "Proprietary Master STT (11.4% Raw CER • 41.77 Hrs)",
             "word_timestamps": res.get("word_timestamps", []),
             "srt_subtitles": res.get("srt_subtitles", "")
         }
@@ -680,14 +680,14 @@ async def list_checkpoints():
     if (prod_dir / "model.safetensors").exists():
         stat = (prod_dir / "model.safetensors").stat()
         ckpts.append({
-            "filename": "mms300m_trilingual_5.4cer.safetensors",
-            "name": "Enterprise Production Trilingual (5.4% CER Flagship)",
+            "filename": "stt_master_11cer_checkpoint.safetensors",
+            "name": "Proprietary Master STT (11.4% Raw CER • 41.77 Hrs)",
             "size_mb": round(stat.st_size / (1024 * 1024), 1),
-            "epoch": "v3-Production",
-            "val_cer": 5.4,
-            "val_wer": 18.2,
-            "languages": "Gujarati (4.2%), Hindi (4.6%), English (7.3%)",
-            "engine": "Wav2Vec2/MMS + KenLM 3-Gram Beam Search",
+            "epoch": "Epoch 30 (Kaggle Master)",
+            "val_cer": 11.40,
+            "val_wer": 37.63,
+            "languages": "Gujarati • Hindi • English",
+            "engine": "Wav2Vec2/MMS Master (18,581 Clips) + Adaptive KenLM",
             "status": "Active Flagship",
             "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
         })
