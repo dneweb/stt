@@ -486,11 +486,11 @@ class STTInference:
             if active_decoder is not None:
                 if target_lang == "en":
                     # English optimized: higher LM reliance & strong word insertion penalty to avoid skipping short words
-                    active_decoder.reset_params(alpha=0.75, beta=2.2)
+                    active_decoder.reset_params(alpha=0.25, beta=1.0)
                     beam_w = 140 if is_mic else 110
                     hw_weight = 12.0 if is_mic else 9.0
                 elif is_mic:
-                    active_decoder.reset_params(alpha=0.65, beta=1.5)
+                    active_decoder.reset_params(alpha=0.30, beta=1.0)
                     beam_w = 128
                     hw_weight = 10.0
                 else:
