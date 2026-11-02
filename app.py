@@ -593,6 +593,15 @@ def run_model_inference_on_audio(audio_path: Path, model_type: str = "production
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Conformer-CTC STT Studio")
 
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Static audio serving from dataset
 app.mount("/audio_files", StaticFiles(directory=str(DATASET_DIR)), name="audio_files")
 

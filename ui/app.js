@@ -357,8 +357,8 @@ async function sendAudioForTranscription(audioBlob, filename) {
     }
   } catch (err) {
     console.error("Inference request failed:", err);
-    showToast("Transcription failed. Please try again.");
-    displayError("Transcription encountered an error. Check server logs.");
+    showToast(`Transcription error: ${err.message || "Failed"}`);
+    displayError(`Error: ${err.message || "Transcription encountered an error. Check server logs."}`);
   } finally {
     setLoadingState(false);
     document.getElementById("micLabel").textContent = "Click to Start Speaking";
