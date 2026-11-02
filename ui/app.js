@@ -138,8 +138,10 @@ async function startRecording() {
     };
 
     mediaRecorder.onstop = () => {
-      const audioBlob = new Blob(audioChunks, { type: "audio/wav" });
-      handleRecordedAudio(audioBlob);
+      const mime = mediaRecorder.mimeType || "audio/webm";
+      const ext = mime.includes("mp4") ? "mp4" : (mime.includes("ogg") ? "ogg" : "webm");
+      const audioBlob = new Blob(audioChunks, { type: mime });
+      handleRecordedAudio(audioBlob, `mic_recording.${ext}`);
     };
 
     mediaRecorder.start(100);
@@ -203,7 +205,7 @@ function updateRecordTimer() {
   timerEl.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
 }
 
-function handleRecordedAudio(blob) {
+function handleRecordedAudio(blob, filename = "mic_recording.webm") {
   // Setup audio player preview
   const audioUrl = URL.createObjectURL(blob);
   const player = document.getElementById("audioElement");
@@ -212,7 +214,7 @@ function handleRecordedAudio(blob) {
   document.getElementById("audioPlayerStrip").classList.remove("hidden");
 
   // Send for transcription
-  sendAudioForTranscription(blob, "mic_recording.wav");
+  sendAudioForTranscription(blob, filename);
 }
 
 // ============================================================================
@@ -348,7 +350,11 @@ async function sendAudioForTranscription(audioBlob, filename) {
     }
 
     const data = await response.json();
-    displayResults(data);
+    if (data.error && !data.predicted_text) {
+      displayError(data.error);
+    } else {
+      displayResults(data);
+    }
   } catch (err) {
     console.error("Inference request failed:", err);
     showToast("Transcription failed. Please try again.");

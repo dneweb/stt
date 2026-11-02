@@ -316,7 +316,14 @@ class STTInference:
         is_mic = (source == "mic")
 
         # Load audio & capture pre-processing diagnostics
-        raw_waveform, sr = sf.read(str(audio_path), dtype="float32")
+        try:
+            raw_waveform, sr = sf.read(str(audio_path), dtype="float32")
+        except Exception:
+            import torchaudio
+            wav, sr = torchaudio.load(str(audio_path))
+            if wav.shape[0] > 1:
+                wav = wav.mean(dim=0)
+            raw_waveform = wav.squeeze().cpu().numpy().astype("float32")
         orig_duration = len(raw_waveform) / sr
         orig_channels = 1 if raw_waveform.ndim == 1 else raw_waveform.shape[1]
         orig_sr = orig_sr_hint if orig_sr_hint else sr

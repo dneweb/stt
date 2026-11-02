@@ -482,23 +482,39 @@ def run_production_stt_inference(audio_path: Path, language: str = "auto"):
     engine = get_production_engine()
     if engine is None:
         return run_wav2vec_onnx_inference(audio_path)
-    res = engine.transcribe_file(str(audio_path), language=language, source="file")
-    return {
-        "predicted_text": res.get("text", ""),
-        "ctc_text": res.get("ctc_text", ""),
-        "lm_text": res.get("lm_text", ""),
-        "duration_sec": round(res.get("duration", 0.0), 2),
-        "inference_time_ms": round(res.get("inference_time", 0.0) * 1000, 1),
-        "device": "PyTorch CPU + KenLM Beam Search",
-        "model_name": "Enterprise Trilingual STT (5.4% CER Flagship)",
-        "word_timestamps": res.get("word_timestamps", []),
-        "srt_subtitles": res.get("srt_subtitles", "")
-    }
+
+    # Always ensure clean 16kHz mono 16-bit PCM WAV via ffmpeg (handles WebM, Opus, MP3, etc.)
+    clean_wav = UPLOAD_TEMP_DIR / f"prod_clean_{int(time.time() * 1000)}.wav"
+    file_to_transcribe = audio_path
+    converted = convert_to_wav16k_mono(audio_path, clean_wav)
+    if converted:
+        file_to_transcribe = clean_wav
+
+    try:
+        res = engine.transcribe_file(str(file_to_transcribe), language=language, source="file")
+        return {
+            "predicted_text": res.get("text", ""),
+            "ctc_text": res.get("ctc_text", ""),
+            "lm_text": res.get("lm_text", ""),
+            "duration_sec": round(res.get("duration", 0.0), 2),
+            "inference_time_ms": round(res.get("inference_time", 0.0) * 1000, 1),
+            "device": "PyTorch CPU + KenLM Beam Search",
+            "model_name": "Enterprise Trilingual STT (5.4% CER Flagship)",
+            "word_timestamps": res.get("word_timestamps", []),
+            "srt_subtitles": res.get("srt_subtitles", "")
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "predicted_text": f"Error: {e}"}
+    finally:
+        if clean_wav.exists():
+            clean_wav.unlink()
 
 
-def run_model_inference_on_audio(audio_path: Path, model_type: str = "production_kenlm"):
+def run_model_inference_on_audio(audio_path: Path, model_type: str = "production_kenlm", language: str = "auto"):
     if model_type in ["production_kenlm", "mms_production", "kenlm"] or (model_type == "wav2vec_onnx" and (BASE_DIR / "models" / "stt_production_v3" / "model.safetensors").exists()):
-        return run_production_stt_inference(audio_path)
+        return run_production_stt_inference(audio_path, language=language)
 
     if model_type == "wav2vec_onnx":
         return run_wav2vec_onnx_inference(audio_path)
@@ -708,24 +724,28 @@ async def get_random_validation_sample():
 
 
 @app.post("/api/infer/sample_path")
-async def infer_sample_path(rel_path: str = Form(...), model_type: str = Form("wav2vec_onnx")):
+async def infer_sample_path(rel_path: str = Form(...), model_type: str = Form("production_kenlm"), language: str = Form("auto")):
     full_path = DATASET_DIR / rel_path
     if not full_path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
-    result = run_model_inference_on_audio(full_path, model_type=model_type)
+    result = run_model_inference_on_audio(full_path, model_type=model_type, language=language)
     return result
 
 
 @app.post("/api/infer/upload")
-async def infer_uploaded_audio(file: UploadFile = File(...), model_type: str = Form("wav2vec_onnx")):
+async def infer_uploaded_audio(file: UploadFile = File(...), model_type: str = Form("production_kenlm"), language: str = Form("auto")):
     suffix = Path(file.filename or "upload.wav").suffix or ".wav"
     temp_file = UPLOAD_TEMP_DIR / f"upload_{int(time.time() * 1000)}{suffix}"
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        result = run_model_inference_on_audio(temp_file, model_type=model_type)
+        result = run_model_inference_on_audio(temp_file, model_type=model_type, language=language)
         return result
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e), "predicted_text": f"Error: {e}"}
     finally:
         if temp_file.exists():
             temp_file.unlink()
