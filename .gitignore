@@ -32,4 +32,6 @@ env/
 # Temporary files
 /tmp/
 *.log
+hf_model_staging/
+hf_space_build/
 

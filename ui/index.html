@@ -31,7 +31,7 @@
     <!-- Active Flagship Status -->
     <div class="engine-badge">
       <span class="pulse-dot"></span>
-      <span class="engine-name">Engine: <strong>11.4% Raw CER Flagship (41.77 Hrs)</strong></span>
+      <span class="engine-name">Active Model: <strong>stt_trained_model_v4_10.3cer</strong></span>
     </div>
   </header>
 
@@ -234,8 +234,76 @@
           <span id="metricLatency" class="metric-value">0 ms</span>
         </div>
         <div class="metric-item">
-          <span class="metric-label">Language Model</span>
-          <span id="metricLM" class="metric-value">KenLM 3-Gram</span>
+          <span class="metric-label">Real-Time Factor</span>
+          <span id="metricRTF" class="metric-value">0.00x</span>
+        </div>
+        <div class="metric-item">
+          <span class="metric-label">Active Model</span>
+          <span id="metricModel" class="metric-value">stt_trained_model_v4_10.3cer</span>
+        </div>
+      </div>
+
+      <!-- Benchmark & Accuracy Verification Card (Visible when Ground Truth is tested) -->
+      <div id="accuracyBenchmarkCard" class="accuracy-card hidden">
+        <div class="accuracy-card-header">
+          <div class="accuracy-title-group">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+            <span class="accuracy-heading">Mathematically Computed Accuracy (Zero Estimations)</span>
+          </div>
+          <span id="accuracyMatchBadge" class="accuracy-match-badge perfect">100% Match</span>
+        </div>
+        
+        <div class="accuracy-metrics-grid">
+          <div class="acc-stat-box">
+            <span class="acc-stat-label">Character Error Rate (CER)</span>
+            <span id="accCERValue" class="acc-stat-number">0.00%</span>
+            <span id="accCharCount" class="acc-stat-sub">0 errors in 38 chars</span>
+          </div>
+          <div class="acc-stat-box">
+            <span class="acc-stat-label">Word Error Rate (WER)</span>
+            <span id="accWERValue" class="acc-stat-number">0.00%</span>
+            <span id="accWordCount" class="acc-stat-sub">0 errors in 8 words</span>
+          </div>
+          <div class="acc-stat-box">
+            <span class="acc-stat-label">Levenshtein Edit Distance</span>
+            <span id="accEditDist" class="acc-stat-number">0</span>
+            <span class="acc-stat-sub">Exact char differences</span>
+          </div>
+        </div>
+
+        <div class="accuracy-comparison-table">
+          <div class="comparison-line">
+            <span class="cmp-label ref-label">Ground Truth:</span>
+            <span id="accRefText" class="cmp-content ref-content">...</span>
+          </div>
+          <div class="comparison-line">
+            <span class="cmp-label hyp-label">Model Output:</span>
+            <span id="accHypText" class="cmp-content hyp-content">...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Microphone Verification Prompt (Optional test for user's own spoken voice) -->
+      <div id="liveVoiceBenchmarkBox" class="live-voice-box hidden">
+        <div class="live-voice-header" onclick="toggleLiveVoiceInput()">
+          <div class="live-voice-info">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <span>Live microphone input has no pre-defined reference. Want to verify exact CER on what you spoke?</span>
+          </div>
+          <button type="button" class="live-voice-btn">Verify What I Spoke</button>
+        </div>
+        <div id="liveVoiceDrawer" class="live-voice-drawer hidden">
+          <div class="live-input-row">
+            <input type="text" id="liveSpokenInput" class="live-spoken-input" placeholder="Type the exact sentence you spoke...">
+            <button type="button" class="btn-calculate-acc" onclick="submitLiveBenchmark()">Calculate Exact CER & WER</button>
+          </div>
         </div>
       </div>
 

@@ -315,12 +315,12 @@ async function loadSample(lang, audioUrl, label) {
   document.getElementById("audioPlayerStrip").classList.remove("hidden");
   player.play();
 
-  // Fetch sample as blob and run inference
+  // Fetch sample as blob and run inference with ground truth reference text
   try {
     setLoadingState(true);
     const response = await fetch(audioUrl);
     const blob = await response.blob();
-    sendAudioForTranscription(blob, `sample_${lang}.wav`);
+    sendAudioForTranscription(blob, `sample_${lang}.wav`, label);
   } catch (err) {
     console.error("Failed to load sample audio:", err);
     setLoadingState(false);
@@ -331,13 +331,22 @@ async function loadSample(lang, audioUrl, label) {
 // ============================================================================
 // 6. BACKEND API TRANSCRIPTION
 // ============================================================================
-async function sendAudioForTranscription(audioBlob, filename) {
+async function sendAudioForTranscription(audioBlob, filename, referenceText = null) {
   setLoadingState(true);
+
+  // Clear previous accuracy card
+  const accCard = document.getElementById("accuracyBenchmarkCard");
+  if (accCard) accCard.classList.add("hidden");
+  const liveBox = document.getElementById("liveVoiceBenchmarkBox");
+  if (liveBox) liveBox.classList.add("hidden");
 
   const formData = new FormData();
   formData.append("file", audioBlob, filename);
   formData.append("model_type", "production_kenlm");
   formData.append("language", currentLanguage);
+  if (referenceText) {
+    formData.append("reference_text", referenceText);
+  }
 
   try {
     const response = await fetch("/api/infer/upload", {
@@ -366,7 +375,7 @@ async function sendAudioForTranscription(audioBlob, filename) {
 }
 
 // ============================================================================
-// 7. RESULTS DISPLAY & TELEMETRY
+// 7. RESULTS DISPLAY & ACCURATE BENCHMARK TELEMETRY (ZERO GUESSES)
 // ============================================================================
 function setLoadingState(isLoading) {
   const badge = document.getElementById("outputStateBadge");
@@ -396,18 +405,118 @@ function displayResults(data) {
   textEl.textContent = currentTranscription;
   textEl.classList.remove("empty");
 
-  // Telemetry strip
+  // Real-time measurable telemetry strip (Zero guesses)
   document.getElementById("metricsStrip").classList.remove("hidden");
-  document.getElementById("metricDuration").textContent = `${data.duration_sec || 0}s`;
-  document.getElementById("metricLatency").textContent = `${data.inference_time_ms || 0} ms`;
-  document.getElementById("metricLM").textContent = "Master Acoustic + KenLM (11.4% Raw CER)";
+  const durationSec = data.duration_sec || 0;
+  const latencyMs = data.inference_time_ms || 0;
+  const rtf = durationSec > 0 ? (latencyMs / (durationSec * 1000)).toFixed(2) : "0.00";
 
-  // Language script detection
+  document.getElementById("metricDuration").textContent = `${durationSec}s`;
+  document.getElementById("metricLatency").textContent = `${latencyMs} ms`;
+  document.getElementById("metricRTF").textContent = `${rtf}x`;
+  document.getElementById("metricModel").textContent = data.model_name || "stt_trained_model_v4_10.3cer";
+
+  // Real language script detection from output Unicode range
   const detected = detectScriptFromText(currentTranscription);
   document.getElementById("metricLang").textContent = detected;
 
   // Word timestamps
   renderWordTimestamps(data.word_timestamps || []);
+
+  // MATHEMATICAL CER & WER BENCHMARK DISPLAY
+  const accCard = document.getElementById("accuracyBenchmarkCard");
+  const liveBox = document.getElementById("liveVoiceBenchmarkBox");
+
+  if (data.benchmark_metrics && data.benchmark_metrics.has_ground_truth) {
+    // Show exact mathematically computed Levenshtein Accuracy Card
+    accCard.classList.remove("hidden");
+    liveBox.classList.add("hidden");
+
+    const m = data.benchmark_metrics;
+    document.getElementById("accCERValue").textContent = `${m.cer.toFixed(2)}%`;
+    document.getElementById("accWERValue").textContent = `${m.wer.toFixed(2)}%`;
+    document.getElementById("accEditDist").textContent = `${m.char_errors}`;
+    document.getElementById("accCharCount").textContent = `${m.char_errors} errors in ${m.total_chars} chars`;
+    document.getElementById("accWordCount").textContent = `${m.word_errors} errors in ${m.total_words} words`;
+
+    const matchBadge = document.getElementById("accuracyMatchBadge");
+    if (m.is_perfect_match || m.cer === 0) {
+      matchBadge.className = "accuracy-match-badge perfect";
+      matchBadge.textContent = "100% Exact Match (0 Errors)";
+    } else {
+      matchBadge.className = "accuracy-match-badge imperfect";
+      matchBadge.textContent = `${Math.max(0, 100 - m.cer).toFixed(1)}% Match (${m.char_errors} char errors)`;
+    }
+
+    document.getElementById("accRefText").textContent = m.reference_text;
+    document.getElementById("accHypText").textContent = m.hypothesis_text;
+  } else {
+    // Live input has no pre-defined ground truth
+    accCard.classList.add("hidden");
+    // Show live verification box so user can test their voice accurately if desired
+    liveBox.classList.remove("hidden");
+  }
+}
+
+// Live Voice Accuracy Benchmarking
+function toggleLiveVoiceInput() {
+  const drawer = document.getElementById("liveVoiceDrawer");
+  drawer.classList.toggle("hidden");
+  if (!drawer.classList.contains("hidden")) {
+    const input = document.getElementById("liveSpokenInput");
+    input.focus();
+  }
+}
+
+async function submitLiveBenchmark() {
+  const refText = document.getElementById("liveSpokenInput").value.trim();
+  if (!refText) {
+    showToast("Please enter the words you spoke.");
+    return;
+  }
+  if (!currentTranscription || currentTranscription === "(No speech detected)") {
+    showToast("No active transcription to compare against.");
+    return;
+  }
+
+  try {
+    const formData = new FormData();
+    formData.append("reference", refText);
+    formData.append("hypothesis", currentTranscription);
+
+    const response = await fetch("/api/metrics/calculate", {
+      method: "POST",
+      body: formData
+    });
+
+    const m = await response.json();
+
+    const accCard = document.getElementById("accuracyBenchmarkCard");
+    accCard.classList.remove("hidden");
+
+    document.getElementById("accCERValue").textContent = `${m.cer.toFixed(2)}%`;
+    document.getElementById("accWERValue").textContent = `${m.wer.toFixed(2)}%`;
+    document.getElementById("accEditDist").textContent = `${m.char_errors}`;
+    document.getElementById("accCharCount").textContent = `${m.char_errors} errors in ${m.total_chars} chars`;
+    document.getElementById("accWordCount").textContent = `${m.word_errors} errors in ${m.total_words} words`;
+
+    const matchBadge = document.getElementById("accuracyMatchBadge");
+    if (m.is_perfect_match || m.cer === 0) {
+      matchBadge.className = "accuracy-match-badge perfect";
+      matchBadge.textContent = "100% Exact Match (0 Errors)";
+    } else {
+      matchBadge.className = "accuracy-match-badge imperfect";
+      matchBadge.textContent = `${Math.max(0, 100 - m.cer).toFixed(1)}% Match (${m.char_errors} char errors)`;
+    }
+
+    document.getElementById("accRefText").textContent = m.reference;
+    document.getElementById("accHypText").textContent = m.hypothesis;
+
+    showToast(`Exact Levenshtein: CER ${m.cer.toFixed(2)}% • WER ${m.wer.toFixed(2)}%`);
+  } catch (err) {
+    console.error("Metric calculation failed:", err);
+    showToast("Failed to calculate metrics.");
+  }
 }
 
 function displayError(msg) {

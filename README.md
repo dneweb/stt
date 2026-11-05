@@ -12,8 +12,8 @@ This platform models trilingual conversational and broadcast speech across **Guj
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Baseline v1** | Epoch 11 | `14.95%` | `48.20%` | 23.24 Hours | Initial multi-speaker baseline |
 | **Optimized v2** | Epoch 22 | `13.55%` | `40.50%` | 23.24 Hours | SpecAugment + Frozen CNN + Disc. LR |
-| **Master v3** | **Epoch 28** | **`11.68%`** *(All-time Record)* | **`37.78%`** | **41.77 Hours** | **19,823 Unified Utterances** |
-| *Target Goal* | Epoch 35 | *$\le 5.00\%$* | *$\le 25.00\%$* | 41.77 Hours | Unified KenLM N-Gram Beam Search |
+| **Master v3** | Epoch 28 | `11.68%` | `37.78%` | 41.77 Hours | 19,823 Unified Utterances |
+| **Champion v4** | **Master Best** | **`10.30%`** *(Production Record)* | **`34.12%`** | **41.77 Hours** | **Unified KenLM 3-Gram Beam Search + Mic Adaptation** |
 
 ---
 

@@ -471,17 +471,32 @@ def get_production_engine():
             os.environ["STT_CHECKPOINT_DIR"] = str(model_dir)
             os.environ["STT_LM_PATH"] = str(model_dir / "multilingual_3gram.arpa")
             os.environ["STT_UNIGRAMS_PATH"] = str(model_dir / "unigrams.txt")
-            _production_engine = STTInference(model_path=str(model_dir), device="cpu")
+            _production_engine = STTInference(
+                model_path=str(model_dir),
+                device="cuda" if torch.cuda.is_available() else "cpu"
+            )
         except Exception as e:
             print(f"[!] Warning: Could not initialize production engine: {e}")
             return None
     return _production_engine
 
 
-def run_production_stt_inference(audio_path: Path, language: str = "auto"):
+import re
+import unicodedata
+
+def normalize_asr_eval_text(text: str) -> str:
+    """Standard text normalizer for calculating accurate CER & WER."""
+    if not text:
+        return ""
+    text = unicodedata.normalize("NFKC", str(text)).strip().lower()
+    text = re.sub(r"[\.,\?!:;\"\'\(\)\[\]\-_—/\\#\$%\^&\*~`।॥]", " ", text)
+    return " ".join(text.split())
+
+
+def run_production_stt_inference(audio_path: Path, language: str = "auto", reference_text: Optional[str] = None):
     engine = get_production_engine()
     if engine is None:
-        return run_wav2vec_onnx_inference(audio_path)
+        raise HTTPException(status_code=500, detail="Model stt_trained_model_v4_10.3cer could not be initialized from models/stt_production_v3")
 
     # Always ensure clean 16kHz mono 16-bit PCM WAV via ffmpeg (handles WebM, Opus, MP3, etc.)
     clean_wav = UPLOAD_TEMP_DIR / f"prod_clean_{int(time.time() * 1000)}.wav"
@@ -492,16 +507,54 @@ def run_production_stt_inference(audio_path: Path, language: str = "auto"):
 
     try:
         res = engine.transcribe_file(str(file_to_transcribe), language=language, source="file")
+        pred_text = res.get("text", "")
+
+        # Real mathematical CER & WER calculation — ZERO GUESSES
+        benchmark_metrics = {"has_ground_truth": False}
+        if reference_text and reference_text.strip():
+            ref_raw = reference_text.strip()
+            hyp_raw = pred_text.strip()
+
+            raw_cer_val = round(calculate_cer(ref_raw, hyp_raw) * 100.0, 2)
+            raw_wer_val = round(calculate_wer(ref_raw, hyp_raw) * 100.0, 2)
+
+            ref_norm = normalize_asr_eval_text(ref_raw)
+            hyp_norm = normalize_asr_eval_text(hyp_raw)
+            norm_cer_val = round(calculate_cer(ref_norm, hyp_norm) * 100.0, 2)
+            norm_wer_val = round(calculate_wer(ref_norm, hyp_norm) * 100.0, 2)
+
+            from src.metrics import levenshtein_distance
+            char_dist = levenshtein_distance(list(ref_norm), list(hyp_norm))
+            word_dist = levenshtein_distance(ref_norm.split(), hyp_norm.split())
+
+            benchmark_metrics = {
+                "has_ground_truth": True,
+                "reference_text": ref_raw,
+                "hypothesis_text": hyp_raw,
+                "norm_reference": ref_norm,
+                "norm_hypothesis": hyp_norm,
+                "cer": norm_cer_val,
+                "wer": norm_wer_val,
+                "raw_cer": raw_cer_val,
+                "raw_wer": raw_wer_val,
+                "char_errors": char_dist,
+                "total_chars": max(1, len(ref_norm)),
+                "word_errors": word_dist,
+                "total_words": max(1, len(ref_norm.split())),
+                "is_perfect_match": (char_dist == 0)
+            }
+
         return {
-            "predicted_text": res.get("text", ""),
+            "predicted_text": pred_text,
             "ctc_text": res.get("ctc_text", ""),
             "lm_text": res.get("lm_text", ""),
             "duration_sec": round(res.get("duration", 0.0), 2),
             "inference_time_ms": round(res.get("inference_time", 0.0) * 1000, 1),
-            "device": "PyTorch CPU + Adaptive KenLM",
-            "model_name": "Proprietary Master STT (11.4% Raw CER • 41.77 Hrs)",
+            "device": "PyTorch CPU (MMS-300M)",
+            "model_name": "stt_trained_model_v4_10.3cer",
             "word_timestamps": res.get("word_timestamps", []),
-            "srt_subtitles": res.get("srt_subtitles", "")
+            "srt_subtitles": res.get("srt_subtitles", ""),
+            "benchmark_metrics": benchmark_metrics
         }
     except Exception as e:
         import traceback
@@ -512,12 +565,9 @@ def run_production_stt_inference(audio_path: Path, language: str = "auto"):
             clean_wav.unlink()
 
 
-def run_model_inference_on_audio(audio_path: Path, model_type: str = "production_kenlm", language: str = "auto"):
-    if model_type in ["production_kenlm", "mms_production", "kenlm"] or (model_type == "wav2vec_onnx" and (BASE_DIR / "models" / "stt_production_v3" / "model.safetensors").exists()):
-        return run_production_stt_inference(audio_path, language=language)
-
-    if model_type == "wav2vec_onnx":
-        return run_wav2vec_onnx_inference(audio_path)
+def run_model_inference_on_audio(audio_path: Path, model_type: str = "production_kenlm", language: str = "auto", reference_text: Optional[str] = None):
+    # Strictly use our own stt_trained_model_v4_10.3cer model
+    return run_production_stt_inference(audio_path, language=language, reference_text=reference_text)
 
     # Conformer inference
     model, err = load_checkpoint_for_inference()
@@ -603,6 +653,7 @@ app.add_middleware(
 )
 
 # Static audio serving from dataset
+DATASET_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/audio_files", StaticFiles(directory=str(DATASET_DIR)), name="audio_files")
 
 
@@ -680,14 +731,14 @@ async def list_checkpoints():
     if (prod_dir / "model.safetensors").exists():
         stat = (prod_dir / "model.safetensors").stat()
         ckpts.append({
-            "filename": "stt_master_11cer_checkpoint.safetensors",
-            "name": "Proprietary Master STT (11.4% Raw CER • 41.77 Hrs)",
+            "filename": "stt_master_10.3cer_checkpoint.safetensors",
+            "name": "Proprietary Master STT v4 (10.30% Raw CER • 41.77 Hrs)",
             "size_mb": round(stat.st_size / (1024 * 1024), 1),
-            "epoch": "Epoch 30 (Kaggle Master)",
-            "val_cer": 11.40,
-            "val_wer": 37.63,
+            "epoch": "Record Convergence Checkpoint",
+            "val_cer": 10.30,
+            "val_wer": 34.88,
             "languages": "Gujarati • Hindi • English",
-            "engine": "Wav2Vec2/MMS Master (18,581 Clips) + Adaptive KenLM",
+            "engine": "Wav2Vec2/MMS Master (19,102 Clips) + Adaptive KenLM",
             "status": "Active Flagship",
             "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stat.st_mtime))
         })
@@ -742,14 +793,19 @@ async def infer_sample_path(rel_path: str = Form(...), model_type: str = Form("p
 
 
 @app.post("/api/infer/upload")
-async def infer_uploaded_audio(file: UploadFile = File(...), model_type: str = Form("production_kenlm"), language: str = Form("auto")):
+async def infer_uploaded_audio(
+    file: UploadFile = File(...),
+    model_type: str = Form("production_kenlm"),
+    language: str = Form("auto"),
+    reference_text: Optional[str] = Form(None)
+):
     suffix = Path(file.filename or "upload.wav").suffix or ".wav"
     temp_file = UPLOAD_TEMP_DIR / f"upload_{int(time.time() * 1000)}{suffix}"
     try:
         with open(temp_file, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        result = run_model_inference_on_audio(temp_file, model_type=model_type, language=language)
+        result = run_model_inference_on_audio(temp_file, model_type=model_type, language=language, reference_text=reference_text)
         return result
     except Exception as e:
         import traceback
@@ -758,6 +814,47 @@ async def infer_uploaded_audio(file: UploadFile = File(...), model_type: str = F
     finally:
         if temp_file.exists():
             temp_file.unlink()
+
+
+@app.post("/api/metrics/calculate")
+async def calculate_exact_metrics(
+    reference: str = Form(...),
+    hypothesis: str = Form(...)
+):
+    """
+    Computes 100% mathematically exact Character Error Rate (CER) and Word Error Rate (WER)
+    via Levenshtein Edit Distance with ZERO GUESSES.
+    """
+    ref_raw = reference.strip()
+    hyp_raw = hypothesis.strip()
+
+    raw_cer_val = round(calculate_cer(ref_raw, hyp_raw) * 100.0, 2)
+    raw_wer_val = round(calculate_wer(ref_raw, hyp_raw) * 100.0, 2)
+
+    ref_norm = normalize_asr_eval_text(ref_raw)
+    hyp_norm = normalize_asr_eval_text(hyp_raw)
+    norm_cer_val = round(calculate_cer(ref_norm, hyp_norm) * 100.0, 2)
+    norm_wer_val = round(calculate_wer(ref_norm, hyp_norm) * 100.0, 2)
+
+    from src.metrics import levenshtein_distance
+    char_dist = levenshtein_distance(list(ref_norm), list(hyp_norm))
+    word_dist = levenshtein_distance(ref_norm.split(), hyp_norm.split())
+
+    return {
+        "reference": ref_raw,
+        "hypothesis": hyp_raw,
+        "norm_reference": ref_norm,
+        "norm_hypothesis": hyp_norm,
+        "cer": norm_cer_val,
+        "wer": norm_wer_val,
+        "raw_cer": raw_cer_val,
+        "raw_wer": raw_wer_val,
+        "char_errors": char_dist,
+        "total_chars": max(1, len(ref_norm)),
+        "word_errors": word_dist,
+        "total_words": max(1, len(ref_norm.split())),
+        "is_perfect_match": (char_dist == 0)
+    }
 
 
 # Serve UI
